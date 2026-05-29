@@ -35,13 +35,14 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
 
     private static final Path VAULT_CERT_CONTAINER_PATH = Path.of("/vault/certs");
 
-    private static final String VAULT_CONFIG = String.format(
+    private static String vaultConfig(boolean requireMutualTls) {
+        return String.format(
             "listener \"tcp\" {\n" +
             "  address             = \"0.0.0.0:%d\"\n" +
             "  tls_cert_file       = \"%s\"\n" +
             "  tls_key_file        = \"%s\"\n" +
             "  tls_client_ca_file  = \"%s\"\n" +
-            "  tls_require_and_verify_client_cert = false\n" +
+            "  tls_require_and_verify_client_cert = %s\n" +
             "}\n" +
             "\n" +
             "storage \"file\" {\n" +
@@ -56,8 +57,10 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
             VAULT_CERT_CONTAINER_PATH.resolve(VAULT_CERT_NAME).toAbsolutePath(),
             VAULT_CERT_CONTAINER_PATH.resolve(VAULT_CERT_KEY_NAME).toAbsolutePath(),
             VAULT_CERT_CONTAINER_PATH.resolve(CLIENT_CA_CERT_NAME).toAbsolutePath(),
+            requireMutualTls,
             HTTPS_PORT
-    );
+        );
+    }
 
     //custom admin policy configuration - grants all rights the root policy has
     private static final String ADMIN_POLICY_CONFIG = "path \"*\" {\n" +
@@ -81,7 +84,24 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
     private final Path mountedVaultCertsDir;
     private final Path mountedVaultConfigDir;
 
+    /**
+     * Create a Vault container with HTTPS enabled on port 8400. Client certificate is not required.
+     */
     public VaultContainerHttps(String dockerImageName) throws IOException {
+        this(dockerImageName, false);
+    }
+
+    /**
+     * Create a Vault container with HTTPS enabled on port 8400.
+     *
+     * @param requireMutualTls when {@code true}, Vault sets {@code tls_require_and_verify_client_cert = true}
+     *        and rejects TLS connections that do not present a valid client certificate.
+     *        When {@code false}, client certificates are optional -- connections without a client cert
+     *        are accepted at the TLS level, but cert-based authentication may still fail at the Vault auth level.
+     *        Health check uses the HTTP dev port (8200) when mutual TLS is required, since the HTTPS port
+     *        would reject the health probe.
+     */
+    public VaultContainerHttps(String dockerImageName, boolean requireMutualTls) throws IOException {
         super(dockerImageName);
 
         final MountableFile certs;
@@ -97,7 +117,7 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
             prepareCertificatesForHttps(this.generatedCertificatesDir, this.mountedVaultCertsDir);
             certs = MountableFile.forHostPath(this.mountedVaultCertsDir, 0777);
 
-            config = MountableFile.forHostPath(prepareVaultConfig(this.mountedVaultConfigDir), 0777);
+            config = MountableFile.forHostPath(prepareVaultConfig(this.mountedVaultConfigDir, requireMutualTls), 0777);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -109,10 +129,16 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
                 .withInitCommand("policy write admin " + VAULT_CONFIG_CONTAINER_PATH.resolve(ADMIN_POLICY_CONFIG_NAME).toAbsolutePath())
                 .withCommand("server", "-dev");
 
-        this.setWaitStrategy(Wait.forHttps("/v1/sys/health")
-                .forPort(HTTPS_PORT)
-                .allowInsecure()
-                .forResponsePredicate(response -> response.contains("\"initialized\":true")));
+        if (requireMutualTls) {
+            this.setWaitStrategy(Wait.forHttp("/v1/sys/health")
+                    .forPort(8200)
+                    .forResponsePredicate(response -> response.contains("\"initialized\":true")));
+        } else {
+            this.setWaitStrategy(Wait.forHttps("/v1/sys/health")
+                    .forPort(HTTPS_PORT)
+                    .allowInsecure()
+                    .forResponsePredicate(response -> response.contains("\"initialized\":true")));
+        }
     }
 
     private static void prepareCertificatesForHttps(final Path certTmpDir, final Path vaultTmpCertDir) throws Exception {
@@ -162,10 +188,10 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
      * Write configuration strings to files
      * @param vaultConfigDir where to copy hcl configuration files
      */
-    private static Path prepareVaultConfig(final Path vaultConfigDir) throws IOException {
+    private static Path prepareVaultConfig(final Path vaultConfigDir, boolean requireMutualTls) throws IOException {
         final Path vaultConfigFile = vaultConfigDir.resolve(VAULT_CONFIG_NAME);
         final Path adminPolicyConfigFile = vaultConfigDir.resolve(ADMIN_POLICY_CONFIG_NAME);
-        Files.writeString(vaultConfigFile, VAULT_CONFIG);
+        Files.writeString(vaultConfigFile, vaultConfig(requireMutualTls));
         Files.writeString(adminPolicyConfigFile, ADMIN_POLICY_CONFIG);
         return vaultConfigDir;
     }
