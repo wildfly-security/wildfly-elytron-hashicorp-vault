@@ -9,7 +9,16 @@ import io.github.jopenlibs.vault.VaultException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import io.smallrye.certs.CertificateFiles;
+import io.smallrye.certs.CertificateGenerator;
+import io.smallrye.certs.CertificateRequest;
+import io.smallrye.certs.Format;
+import io.smallrye.certs.PemCertificateFiles;
+
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -123,5 +132,51 @@ public class VaultConnectorHttpsTestCase {
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "admin", httpsSslConfig, true);
         vaultService.configure();
         vaultService.removeSecret("secret/testing1", "top_secret");
+    }
+
+    /**
+     * Verify that connection fails when the client trusts a different CA than the one that issued
+     * the Vault server certificate. The SSL handshake should be rejected.
+     */
+    @Test
+    public void testConnectionFailsWithUntrustedServerCert() throws Exception {
+        startVaultTestContainer();
+
+        Path wrongCertDir = Files.createTempDirectory("wrong_certs");
+        try {
+            CertificateRequest request = new CertificateRequest()
+                    .withName("wrong")
+                    .withPassword("secret")
+                    .withClientCertificate()
+                    .withFormat(Format.PEM);
+            List<CertificateFiles> wrongCerts = new CertificateGenerator(wrongCertDir, true).generate(request);
+            PemCertificateFiles wrongPem = (PemCertificateFiles) wrongCerts.stream()
+                    .filter(f -> f instanceof PemCertificateFiles).findFirst().get();
+
+            SslConfig wrongTrustConfig = new SslConfig()
+                    .pemFile(wrongPem.trustFile().toFile())
+                    .verify(true)
+                    .build();
+
+            VaultConnector vaultService = new VaultConnector(
+                    vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", wrongTrustConfig, true);
+            assertThrows(VaultException.class, vaultService::configure);
+        } finally {
+            VaultTestUtils.cleanupDir(wrongCertDir);
+        }
+    }
+
+    /**
+     * Verify that connection fails when SSL verification is enabled but no trust PEM is configured.
+     * The self-signed Vault certificate is not trusted by the JVM default trust store.
+     */
+    @Test
+    public void testConnectionFailsWithNoTrustConfigured() throws Exception {
+        startVaultTestContainer();
+
+        SslConfig noTrustConfig = new SslConfig().verify(true).build();
+        VaultConnector vaultService = new VaultConnector(
+                vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", noTrustConfig, true);
+        assertThrows(VaultException.class, vaultService::configure);
     }
 }

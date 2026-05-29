@@ -6,6 +6,11 @@ package org.wildfly.security.hashicorp.vault;
 
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.VaultException;
+import io.smallrye.certs.CertificateFiles;
+import io.smallrye.certs.CertificateGenerator;
+import io.smallrye.certs.CertificateRequest;
+import io.smallrye.certs.Format;
+import io.smallrye.certs.PemCertificateFiles;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +19,9 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.wildfly.security.hashicorp.vault.auth.TlsCertAuthConfig;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -107,4 +115,53 @@ public class VaultConnectorTlsAuthTestCase {
         assertNull(vaultService.getSecret("secret/testing1", "top_secret"));
     }
 
+    /**
+     * Verify that cert auth login fails when a client certificate signed by a different CA is presented.
+     * The TLS handshake succeeds (tls_require_and_verify_client_cert is false) but loginByCert() fails
+     * because the certificate is not registered in Vault's cert auth backend.
+     */
+    @Test
+    public void testCertAuthFailsWithUntrustedClientCert() throws Exception {
+        Path wrongCertDir = Files.createTempDirectory("wrong_client_certs");
+        try {
+            CertificateRequest request = new CertificateRequest()
+                    .withName("wrong")
+                    .withPassword("secret")
+                    .withClientCertificate()
+                    .withFormat(Format.PEM);
+            List<CertificateFiles> wrongCerts = new CertificateGenerator(wrongCertDir, true).generate(request);
+            PemCertificateFiles wrongPem = (PemCertificateFiles) wrongCerts.stream()
+                    .filter(f -> f instanceof PemCertificateFiles).findFirst().get();
+
+            SslConfig wrongClientConfig = new SslConfig()
+                    .pemFile(vaultTestContainer.getHttpsTrustFile().toFile())
+                    .clientPemFile(wrongPem.clientCertFile().toFile())
+                    .clientKeyPemFile(wrongPem.clientKeyFile().toFile())
+                    .verify(true)
+                    .build();
+
+            VaultConnector vaultService = new VaultConnector(
+                    vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", wrongClientConfig, true);
+            assertThrows(VaultException.class, vaultService::configure);
+        } finally {
+            VaultTestUtils.cleanupDir(wrongCertDir);
+        }
+    }
+
+    /**
+     * Verify that cert auth login fails when no client certificate is presented.
+     * The TLS handshake succeeds (tls_require_and_verify_client_cert is false) but
+     * ClientCertificateLoginStrategy fails because there is no certificate to authenticate with.
+     */
+    @Test
+    public void testCertAuthFailsWithNoClientCert() throws Exception {
+        SslConfig trustOnlyConfig = new SslConfig()
+                .pemFile(vaultTestContainer.getHttpsTrustFile().toFile())
+                .verify(true)
+                .build();
+
+        VaultConnector vaultService = new VaultConnector(
+                vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", trustOnlyConfig, true);
+        assertThrows(VaultException.class, vaultService::configure);
+    }
 }
