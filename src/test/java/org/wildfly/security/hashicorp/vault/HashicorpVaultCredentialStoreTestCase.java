@@ -638,8 +638,10 @@ public class HashicorpVaultCredentialStoreTestCase {
     }
 
     /**
-     * Call {@code initialize()} with {@code null} protection parameter (no token provided).
-     * Test passes when {@link CredentialStoreException} is thrown indicating token is required.
+     * Call {@code initialize()} with {@code null} protection parameter (no token provided) and no
+     * alternative auth method configured. The null token passes through to
+     * {@code VaultConnector.tryLoginWithFallback()} which fails because no login strategy succeeds.
+     * Test passes when {@link CredentialStoreException} is thrown.
      */
     @Test
     public void testInitializeWithNullProtectionParameter() {

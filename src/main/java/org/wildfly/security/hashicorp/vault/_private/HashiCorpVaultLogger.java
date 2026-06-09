@@ -36,8 +36,8 @@ public interface HashiCorpVaultLogger extends BasicLogger {
     @Message(id = 2, value = "host-address attribute is required")
     CredentialStoreException hostAddressRequired();
 
-    @Message(id = 3, value = "Vault token is required")
-    CredentialStoreException vaultTokenRequired();
+    @Message(id = 3, value = "No authentication method configured: provide either a vault token (via credential-reference) or TLS client certificate authentication (via authentication-context)")
+    CredentialStoreException noAuthenticationMethodConfigured();
 
     @Message(id = 4, value = "Failed to load KeyStore from path: %s")
     CredentialStoreException failedToLoadKeyStore(String detail, @Cause Exception e);
