@@ -100,9 +100,6 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         try {
             char[] password = getStorePassword(protectionParameter);
             String token = password != null ? String.valueOf(password) : null;
-            if (token == null) {
-                throw ROOT_LOGGER.vaultTokenRequired();
-            }
             
             SslConfig sslConfig = new SslConfig().verify(true);
             
