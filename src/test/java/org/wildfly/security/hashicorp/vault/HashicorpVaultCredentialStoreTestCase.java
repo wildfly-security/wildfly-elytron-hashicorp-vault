@@ -639,9 +639,9 @@ public class HashicorpVaultCredentialStoreTestCase {
 
     /**
      * Call {@code initialize()} with {@code null} protection parameter (no token provided) and no
-     * alternative auth method configured. The null token passes through to
-     * {@code VaultConnector.tryLoginWithFallback()} which fails because no login strategy succeeds.
-     * Test passes when {@link CredentialStoreException} is thrown.
+     * alternative auth method configured (no SSLContext or key-store-path).
+     * Test passes when {@link CredentialStoreException} is thrown by the early validation
+     * in {@code HashicorpVaultCredentialStore} indicating that no authentication method is configured.
      */
     @Test
     public void testInitializeWithNullProtectionParameter() {
