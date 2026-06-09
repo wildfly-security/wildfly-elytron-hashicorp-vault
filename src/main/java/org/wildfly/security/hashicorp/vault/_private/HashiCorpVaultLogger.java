@@ -224,4 +224,7 @@ public interface HashiCorpVaultLogger extends BasicLogger {
 
     @Message(id = 59, value = "Unexpected test container output type %s")
     IllegalArgumentException unexpectedTestContainerOutputType(Object outputType);
+
+    @Message(id = 60, value = "No authentication method configured: provide either a vault token (via credential-reference) or TLS client certificate authentication (via authentication-context)")
+    CredentialStoreException noAuthenticationMethodConfigured();
 }
