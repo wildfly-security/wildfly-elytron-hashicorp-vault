@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import javax.net.ssl.SSLContext;
 
@@ -44,6 +45,8 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     private static final int DEFAULT_CREDENTIAL_CACHE_MAX_SIZE = 500;
     private static List<Class<? extends CredentialStoreExtension>> SUPPORTED_EXTENSION_TYPES =
             List.of(HashicorpVaultCredentialStoreExtension.class);
+    /** Default predicate that always returns false (use KV v2 for all paths). */
+    private static final Predicate<String> DEFAULT_KV_V1_FALLBACK_PREDICATE = path -> false;
 
     String hostAddress;
     String namespace;
@@ -55,6 +58,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     private String keyStorePass;
     private String trustStorePass;
     private SSLContext sslContext;
+    private Predicate<String> kvV1FallbackPredicate = DEFAULT_KV_V1_FALLBACK_PREDICATE;
 
     /** In-memory LRU cache of retrieved credentials, keyed by credential alias (e.g. "path.key"). */
     private Map<String, Credential> credentialCache;
@@ -144,7 +148,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                 }
             }
 
-            vaultConnector = new VaultConnector(this.hostAddress, token, this.namespace, sslConfig, true, sslContext);
+            vaultConnector = new VaultConnector(this.hostAddress, token, this.namespace, sslConfig, true, sslContext, kvV1FallbackPredicate);
             vaultConnector.configure();
 
             initialized = true;
@@ -157,6 +161,10 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     public void setSslContext(SSLContext sslContext) {
         this.sslContext = sslContext;
+    }
+
+    public void setKvV1FallbackPredicate(Predicate<String> kvV1FallbackPredicate) {
+        this.kvV1FallbackPredicate = kvV1FallbackPredicate != null ? kvV1FallbackPredicate : DEFAULT_KV_V1_FALLBACK_PREDICATE;
     }
 
     @Override
@@ -375,6 +383,11 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         @Override
         public void setSslContext(SSLContext sslContext) {
             HashicorpVaultCredentialStore.this.setSslContext(sslContext);
+        }
+
+        @Override
+        public void setKvV1FallbackPredicate(Predicate<String> kvV1FallbackPredicate) {
+            HashicorpVaultCredentialStore.this.setKvV1FallbackPredicate(kvV1FallbackPredicate);
         }
 
         @Override

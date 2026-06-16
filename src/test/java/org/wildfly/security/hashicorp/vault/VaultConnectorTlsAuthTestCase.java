@@ -92,9 +92,10 @@ public class VaultConnectorTlsAuthTestCase {
      * Test will fail since the connector will try to use the token to authenticate.
      */
     @Test
-    public void testGetSecretFromVaultServiceInvalidToken() {
+    public void testGetSecretFromVaultServiceInvalidToken() throws Exception {
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "invalidToken", "secret/testing1", new SslConfig().verify(true), true);
-        assertThrows(VaultException.class, vaultService::configure,
+        vaultService.configure();
+        assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"),
                 "Correct SSL auth config was provided but token was non-empty and invalid. This should fail.");
     }
 
@@ -143,7 +144,8 @@ public class VaultConnectorTlsAuthTestCase {
 
             VaultConnector vaultService = new VaultConnector(
                     vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", wrongClientConfig, true);
-            assertThrows(VaultException.class, vaultService::configure);
+            vaultService.configure();
+            assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }
@@ -163,6 +165,7 @@ public class VaultConnectorTlsAuthTestCase {
 
         VaultConnector vaultService = new VaultConnector(
                 vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", trustOnlyConfig, true);
-        assertThrows(VaultException.class, vaultService::configure);
+        vaultService.configure();
+        assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"));
     }
 }

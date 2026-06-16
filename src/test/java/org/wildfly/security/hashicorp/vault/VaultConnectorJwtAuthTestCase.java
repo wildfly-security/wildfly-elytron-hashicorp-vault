@@ -112,9 +112,10 @@ public class VaultConnectorJwtAuthTestCase {
      * Test will fail since the connector will try to use the JWT to authenticate.
      */
     @Test
-    public void testGetSecretFromVaultServiceInvalidJwtToken() {
+    public void testGetSecretFromVaultServiceInvalidJwtToken() throws Exception {
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), new JwtConfig("someInvalidToken", ROLE_NAME, "jwt"), "secret/testing1", permissibleSslAuthConfig);
-        assertThrows(VaultException.class, vaultService::configure,
+        vaultService.configure();
+        assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"),
                 "Correct SSL HTTPS config was provided but JWT was invalid. This should fail.");
     }
 

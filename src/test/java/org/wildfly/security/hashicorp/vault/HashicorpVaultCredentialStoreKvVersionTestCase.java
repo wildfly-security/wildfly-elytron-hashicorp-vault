@@ -16,6 +16,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -88,8 +89,15 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         );
     }
 
-    private HashicorpVaultCredentialStore createCredentialStore(VaultContainer<?> container) throws Exception {
+    private HashicorpVaultCredentialStore createCredentialStore(VaultContainer<?> container, KvVersion version, String mountPath) throws Exception {
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
+
+        // Set the KV v1 fallback predicate before initialization
+        if (version == KvVersion.V1) {
+            Predicate<String> kvV1Predicate = path -> path.equals(mountPath) || path.startsWith(mountPath + "/");
+            store.setKvV1FallbackPredicate(kvV1Predicate);
+        }
+
         Map<String, String> attributes = new HashMap<>();
         attributes.put("host-address", container.getHttpHostAddress());
         attributes.put("namespace", "admin");
@@ -123,7 +131,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
         PasswordCredential credential = store.retrieve(
             mountPath + "/testing1.top_secret",
             PasswordCredential.class,
@@ -142,7 +150,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Store a new credential
         store.store(mountPath + "/testing1.test_secret", createCredentialFromPassword("testPassword"), null);
@@ -166,7 +174,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Store two credentials at the same path
         store.store(mountPath + "/myapp.mp", createCredentialFromPassword("password1"), null);
@@ -196,7 +204,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Store two credentials
         store.store(mountPath + "/myapp.mp", createCredentialFromPassword("password1"), null);
@@ -235,7 +243,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         Set<String> aliases = store.getAliases(mountPath + "/testing1");
         assertNotNull(aliases, String.format("Should return aliases in %s", version));
@@ -254,7 +262,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Get aliases from testing1
         Set<String> aliases1 = store.getAliases(mountPath + "/testing1");
@@ -274,7 +282,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         Set<String> aliases1 = store.getAliases(mountPath + "/testing1");
         Set<String> aliases2 = store.getAliases(mountPath + "/testing1", false, 0);
@@ -290,7 +298,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Create nested structure
         store.store(mountPath + "/app1.key1", createCredentialFromPassword("value1"), null);
@@ -313,7 +321,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Create nested structure
         store.store(mountPath + "/app1.key1", createCredentialFromPassword("value1"), null);
@@ -336,7 +344,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer);
+        HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Create multiple subpaths at same level
         store.store(mountPath + "/app1.key1", createCredentialFromPassword("value1"), null);

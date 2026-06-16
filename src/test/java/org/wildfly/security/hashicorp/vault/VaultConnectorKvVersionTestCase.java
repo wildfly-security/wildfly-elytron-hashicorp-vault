@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -17,7 +18,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.testcontainers.vault.VaultContainer;
-import org.wildfly.security.hashicorp.vault.KvVersionTestHelper.KvTestConfig;
 import org.wildfly.security.hashicorp.vault.KvVersionTestHelper.KvVersion;
 
 import io.github.jopenlibs.vault.SslConfig;
@@ -88,13 +88,20 @@ public class VaultConnectorKvVersionTestCase {
         );
     }
 
-    private VaultConnector createConnector(VaultContainer<?> container, String token) throws VaultException {
+    private VaultConnector createConnector(VaultContainer<?> container, String token, KvVersion version, String mountPath) throws VaultException {
+        // Create predicate that returns true for KV v1 mounts
+        Predicate<String> kvV1Predicate = version == KvVersion.V1
+            ? path -> path.equals(mountPath) || path.startsWith(mountPath + "/")
+            : path -> false;
+
         VaultConnector connector = new VaultConnector(
             container.getHttpHostAddress(),
             token,
             "admin",
             new SslConfig().verify(true).build(),
-            true
+            true,
+            null,
+            kvV1Predicate
         );
         connector.configure();
         return connector;
@@ -110,7 +117,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
         String secret = connector.getSecret(mountPath + "/testing1", "top_secret");
 
         assertEquals("password123", secret,
@@ -123,7 +130,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Put a new secret
         connector.putSecret(mountPath + "/testing1", "new_secret", "newvalue123");
@@ -140,7 +147,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Verify original value
         String original = connector.getSecret(mountPath + "/testing1", "top_secret");
@@ -161,7 +168,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Verify secret exists
         String original = connector.getSecret(mountPath + "/testing1", "top_secret");
@@ -186,7 +193,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Verify both keys exist initially
         assertEquals("secretpass", connector.getSecret(mountPath + "/testing2", "dbuser"));
@@ -208,7 +215,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Verify both keys exist
         assertNotNull(connector.getSecret(mountPath + "/testing2", "dbuser"));
@@ -234,7 +241,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         String result = connector.getSecret(mountPath + "/nonexistent", "somekey");
         assertNull(result,
@@ -247,7 +254,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         String result = connector.getSecret(mountPath + "/testing1", "nonexistent_key");
         assertNull(result,
@@ -268,7 +275,11 @@ public class VaultConnectorKvVersionTestCase {
             true
         );
 
-        assertThrows(VaultException.class, connector::configure,
+        // Configure succeeds with lazy initialization, but actual operation should fail
+        connector.configure();
+
+        // Try to use the connector - this should trigger lazy initialization and fail
+        assertThrows(VaultException.class, () -> connector.getSecret(mountPath + "/test", "key"),
             String.format("Should throw VaultException for invalid token in %s", version));
     }
 
@@ -282,7 +293,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         var keys = connector.getKeysForPath(mountPath + "/testing2");
         assertNotNull(keys, String.format("Should return keys for path in %s", version));
@@ -298,7 +309,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         VaultException ex = assertThrows(VaultException.class,
             () -> connector.getKeysForPath(mountPath + "/nonexistent"),
@@ -318,7 +329,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Create secret at nested path
         String nestedPath = mountPath + "/app/database/credentials";

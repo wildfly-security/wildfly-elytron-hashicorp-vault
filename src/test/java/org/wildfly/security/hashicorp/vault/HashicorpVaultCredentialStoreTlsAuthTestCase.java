@@ -157,9 +157,11 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
             store.setSslContext(wrongSslContext);
             Map<String, String> attributes = new HashMap<>();
             attributes.put("host-address", vaultTestContainer.composeHttpsHostAddress());
+            store.initialize(attributes, null, new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+            // Exception should be thrown when attempting to use the store
             assertThrows(CredentialStoreException.class,
-                    () -> store.initialize(attributes, null,
-                            new Provider[]{WildFlyElytronPasswordProvider.getInstance()}));
+                    () -> store.retrieve("secret/testing1.top_secret", PasswordCredential.class,
+                            ClearPassword.ALGORITHM_CLEAR, null, null));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }
@@ -178,9 +180,11 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
         store.setSslContext(trustOnlyContext);
         Map<String, String> attributes = new HashMap<>();
         attributes.put("host-address", vaultTestContainer.composeHttpsHostAddress());
+        store.initialize(attributes, null, new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        // Exception should be thrown when attempting to use the store
         assertThrows(CredentialStoreException.class,
-                () -> store.initialize(attributes, null,
-                        new Provider[]{WildFlyElytronPasswordProvider.getInstance()}));
+                () -> store.retrieve("secret/testing1.top_secret", PasswordCredential.class,
+                        ClearPassword.ALGORITHM_CLEAR, null, null));
     }
 
     private HashicorpVaultCredentialStore createStoreWithCertAuth(

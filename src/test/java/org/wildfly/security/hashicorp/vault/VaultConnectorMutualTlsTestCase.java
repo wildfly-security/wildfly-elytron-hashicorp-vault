@@ -92,7 +92,8 @@ public class VaultConnectorMutualTlsTestCase {
 
             VaultConnector connector = new VaultConnector(
                     vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", wrongClientConfig, true);
-            assertThrows(VaultException.class, connector::configure);
+            connector.configure();
+            assertThrows(VaultException.class, () -> connector.getSecret("secret/testing1", "top_secret"));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }
@@ -111,7 +112,8 @@ public class VaultConnectorMutualTlsTestCase {
 
         VaultConnector connector = new VaultConnector(
                 vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", trustOnlyConfig, true);
-        assertThrows(VaultException.class, connector::configure);
+        connector.configure();
+        assertThrows(VaultException.class, () -> connector.getSecret("secret/testing1", "top_secret"));
     }
 
     /**
@@ -139,7 +141,8 @@ public class VaultConnectorMutualTlsTestCase {
             SslConfig sslConfig = new SslConfig().verify(true).build();
             VaultConnector connector = new VaultConnector(
                     vaultTestContainer.composeHttpsHostAddress(), "", null, sslConfig, true, wrongSslContext);
-            assertThrows(VaultException.class, connector::configure);
+            connector.configure();
+            assertThrows(VaultException.class, () -> connector.getSecret("secret/testing1", "top_secret"));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }

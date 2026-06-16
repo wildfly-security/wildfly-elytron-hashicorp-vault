@@ -117,9 +117,10 @@ public class VaultConnectorHttpsTestCase {
                 );
         vaultTestContainer.start();
 
-        // Test vault service with incorrect token - this should throw VaultException during configure()
+        // Test vault service with incorrect token - this should throw VaultException when attempting to use it
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "incorrect-token", "admin", httpsSslConfig, true);
-        assertThrows(VaultException.class, vaultService::configure,
+        vaultService.configure();
+        assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"),
                 "VaultException should be thrown due to authentication failure");
     }
 
@@ -160,7 +161,8 @@ public class VaultConnectorHttpsTestCase {
 
             VaultConnector vaultService = new VaultConnector(
                     vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", wrongTrustConfig, true);
-            assertThrows(VaultException.class, vaultService::configure);
+            vaultService.configure();
+            assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }
@@ -177,6 +179,7 @@ public class VaultConnectorHttpsTestCase {
         SslConfig noTrustConfig = new SslConfig().verify(true).build();
         VaultConnector vaultService = new VaultConnector(
                 vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", noTrustConfig, true);
-        assertThrows(VaultException.class, vaultService::configure);
+        vaultService.configure();
+        assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"));
     }
 }

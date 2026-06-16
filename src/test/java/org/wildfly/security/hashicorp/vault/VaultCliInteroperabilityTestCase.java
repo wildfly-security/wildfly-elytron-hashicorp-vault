@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.wildfly.security.hashicorp.vault.KvVersionTestHelper.cliGetSecret;
 import static org.wildfly.security.hashicorp.vault.KvVersionTestHelper.cliPutSecret;
 
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import io.restassured.path.json.JsonPath;
@@ -81,13 +82,20 @@ public class VaultCliInteroperabilityTestCase {
         );
     }
 
-    private VaultConnector createConnector(VaultContainer<?> container, String token) throws VaultException {
+    private VaultConnector createConnector(VaultContainer<?> container, String token, KvVersion version, String mountPath) throws VaultException {
+        // Create predicate that returns true for KV v1 mounts
+        Predicate<String> kvV1Predicate = version == KvVersion.V1
+            ? path -> path.equals(mountPath) || path.startsWith(mountPath + "/")
+            : path -> false;
+
         VaultConnector connector = new VaultConnector(
             container.getHttpHostAddress(),
             token,
             "admin",
             new SslConfig().verify(true).build(),
-            true
+            true,
+            null,
+            kvV1Predicate
         );
         connector.configure();
         return connector;
@@ -114,7 +122,7 @@ public class VaultCliInteroperabilityTestCase {
             String.format("CLI write should succeed in %s: %s", version, cliResult.getStderr()));
 
         // Read using Java API
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
         String username = connector.getSecret(mountPath + "/cli-test", "username");
         String password = connector.getSecret(mountPath + "/cli-test", "password");
 
@@ -144,7 +152,7 @@ public class VaultCliInteroperabilityTestCase {
             String.format("CLI write should succeed in %s", version));
 
         // Read all keys using Java API
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
         assertEquals("localhost", connector.getSecret(mountPath + "/app-config", "db_host"));
         assertEquals("5432", connector.getSecret(mountPath + "/app-config", "db_port"));
         assertEquals("myapp", connector.getSecret(mountPath + "/app-config", "db_name"));
@@ -163,7 +171,7 @@ public class VaultCliInteroperabilityTestCase {
         vaultContainer.start();
 
         // Write secret using Java API
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
         connector.putSecret(mountPath + "/java-test", "api_key", "key123");
         connector.putSecret(mountPath + "/java-test", "api_secret", "secret456");
 
@@ -200,7 +208,7 @@ public class VaultCliInteroperabilityTestCase {
         vaultContainer.start();
 
         // Write multi-key secret using Java API
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
         connector.putSecret(mountPath + "/service-config", "host", "api.example.com");
         connector.putSecret(mountPath + "/service-config", "port", "443");
         connector.putSecret(mountPath + "/service-config", "protocol", "https");
@@ -243,7 +251,7 @@ public class VaultCliInteroperabilityTestCase {
         cliPutSecret(vaultContainer, mountPath + "/modify-test", "value=original");
 
         // Modify using Java API
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
         connector.putSecret(mountPath + "/modify-test", "value", "modified");
 
         // Verify modification via CLI
@@ -270,7 +278,7 @@ public class VaultCliInteroperabilityTestCase {
         vaultContainer.start();
 
         // Write initial secret using Java API
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
         connector.putSecret(mountPath + "/modify-test2", "status", "initial");
 
         // Modify using CLI
@@ -297,7 +305,7 @@ public class VaultCliInteroperabilityTestCase {
         cliPutSecret(vaultContainer, mountPath + "/multi-key", "key1=value1", "key2=value2", "key3=value3");
 
         // Modify one key using Java API
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
         connector.putSecret(mountPath + "/multi-key", "key2", "modified");
 
         // Verify all keys via CLI
@@ -335,7 +343,7 @@ public class VaultCliInteroperabilityTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Test various special characters
         String specialValue = "p@ssw0rd!#$%^&*(){}[]|\\:;\"'<>,.?/~`";
@@ -371,7 +379,7 @@ public class VaultCliInteroperabilityTestCase {
         vaultContainer = container;
         vaultContainer.start();
 
-        VaultConnector connector = createConnector(vaultContainer, "myroot");
+        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Write empty value using Java API
         connector.putSecret(mountPath + "/empty-test", "empty_key", "");
