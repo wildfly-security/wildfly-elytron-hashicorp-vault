@@ -31,7 +31,7 @@ import io.github.jopenlibs.vault.response.LogicalResponse;
 /**
  * Vault Connector
  */
-public class VaultConnector {
+class VaultConnector {
 
     private final String vaultUrl;
     private final String token;

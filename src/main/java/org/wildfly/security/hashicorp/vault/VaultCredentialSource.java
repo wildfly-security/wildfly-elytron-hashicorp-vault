@@ -23,7 +23,7 @@ import org.wildfly.security.password.spec.ClearPasswordSpec;
 /**
  *  A credential source which is backed by a HashiCorp Vault.
  */
-public class VaultCredentialSource implements CredentialSource {
+class VaultCredentialSource implements CredentialSource {
 
     private final VaultConnector vaultConnector;
     private final String secretPath;
@@ -50,7 +50,7 @@ public class VaultCredentialSource implements CredentialSource {
         if (secretKey == null || secretKey.trim().isEmpty()) {
             throw ROOT_LOGGER.vaultSecretKeyInvalid();
         }
-        
+
         this.vaultConnector = vaultConnector;
         this.secretPath = secretPath;
         this.secretKey = secretKey;
