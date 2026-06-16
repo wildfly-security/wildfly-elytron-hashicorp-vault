@@ -4,8 +4,9 @@
  */
 package org.wildfly.security.hashicorp.vault.loginstrategy;
 
-import io.github.jopenlibs.vault.Vault;
 import org.wildfly.security.hashicorp.vault.JwtConfig;
+
+import io.github.jopenlibs.vault.Vault;
 
 /**
  * Current login context for the vault.

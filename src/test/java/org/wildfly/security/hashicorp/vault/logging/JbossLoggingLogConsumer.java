@@ -10,9 +10,6 @@ import org.jboss.logging.Logger;
 import org.testcontainers.containers.output.BaseConsumer;
 import org.testcontainers.containers.output.OutputFrame;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Jboss logging based consumer for the testcontainers container.
  */

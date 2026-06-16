@@ -4,16 +4,17 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.github.jopenlibs.vault.SslConfig;
-import io.github.jopenlibs.vault.VaultException;
-import org.testcontainers.vault.VaultContainer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.vault.VaultContainer;
+
+import io.github.jopenlibs.vault.SslConfig;
+import io.github.jopenlibs.vault.VaultException;
 
 public class VaultConnectorTestCase {
 
@@ -71,11 +72,11 @@ public class VaultConnectorTestCase {
         // Test vault service
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true).build(), true);
         vaultService.configure();
-        
+
         // First verify the secret exists
         String originalSecret = vaultService.getSecret("secret/testing1", "top_secret");
         assertEquals("password123", originalSecret);
-        
+
         // Remove the secret
         vaultService.removeSecret("secret/testing1", "top_secret");
 

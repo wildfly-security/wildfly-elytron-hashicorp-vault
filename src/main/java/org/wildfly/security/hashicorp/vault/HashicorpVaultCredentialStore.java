@@ -4,32 +4,34 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.github.jopenlibs.vault.SslConfig;
-import io.github.jopenlibs.vault.VaultException;
-import org.wildfly.security.credential.Credential;
-import org.wildfly.security.credential.PasswordCredential;
-import org.wildfly.security.credential.source.CredentialSource;
-import org.wildfly.security.credential.store.CredentialStore;
-import org.wildfly.security.credential.store.CredentialStoreExtension;
-import org.wildfly.security.credential.store.CredentialStoreException;
-import org.wildfly.security.credential.store.CredentialStoreSpi;
-import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
-import org.wildfly.security.password.interfaces.ClearPassword;
+import static org.wildfly.security.credential.store._private.ElytronMessages.log;
+import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
 
-import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.security.KeyStore;
 import java.security.Provider;
 import java.security.spec.AlgorithmParameterSpec;
-import java.util.HashSet;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.wildfly.security.credential.store._private.ElytronMessages.log;
-import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
+import javax.net.ssl.SSLContext;
+
+import org.wildfly.security.credential.Credential;
+import org.wildfly.security.credential.PasswordCredential;
+import org.wildfly.security.credential.source.CredentialSource;
+import org.wildfly.security.credential.store.CredentialStore;
+import org.wildfly.security.credential.store.CredentialStoreException;
+import org.wildfly.security.credential.store.CredentialStoreExtension;
+import org.wildfly.security.credential.store.CredentialStoreSpi;
+import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
+import org.wildfly.security.password.interfaces.ClearPassword;
+
+import io.github.jopenlibs.vault.SslConfig;
+import io.github.jopenlibs.vault.VaultException;
 
 /**
  * Credential store backed by Hashicorp Vault
@@ -63,7 +65,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (attributes == null) {
             throw ROOT_LOGGER.attributesCannotBeNull();
         }
-        
+
         // Check required attributes
         this.hostAddress = attributes.get("host-address");
         if (this.hostAddress == null || this.hostAddress.trim().isEmpty()) {
@@ -85,7 +87,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (attributes.get("trust-store-pass") != null) {
             this.trustStorePass = attributes.get("trust-store-pass");
         }
-        
+
         this.namespace = attributes.get("namespace");
         this.protectionParameter = protectionParameter;
         this.providers = providers;
@@ -108,14 +110,14 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             }
 
             SslConfig sslConfig = new SslConfig().verify(true);
-            
+
             if (this.keyStorePath != null && !this.keyStorePath.trim().isEmpty()) {
                 try {
                     KeyStore keyStore = KeyStore.getInstance("JKS");
                     try (java.io.FileInputStream fis = new java.io.FileInputStream(this.keyStorePath)) {
                         keyStore.load(fis, this.keyStorePass != null ? this.keyStorePass.toCharArray() : null);
                     }
-                    
+
                     if (this.keyStorePass != null) {
                         sslConfig.keyStore(keyStore, this.keyStorePass);
                     } else {
@@ -125,7 +127,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                     throw ROOT_LOGGER.failedToLoadKeyStore(e.getMessage(), e);
                 }
             }
-            
+
             if (this.trustStorePath != null && !this.trustStorePath.trim().isEmpty()) {
                 try {
                     KeyStore trustStore = KeyStore.getInstance("JKS");
@@ -144,7 +146,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
             vaultConnector = new VaultConnector(this.hostAddress, token, this.namespace, sslConfig, true, sslContext);
             vaultConnector.configure();
-            
+
             initialized = true;
         } catch (IOException e) {
             throw ROOT_LOGGER.failedToInitializeVaultCredentialStore(e);
@@ -173,13 +175,13 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (credential == null) {
             throw ROOT_LOGGER.credentialCannotBeNull();
         }
-        
+
         // Parse credentialAlias in format "path.key"
         String[] aliasSplit = credentialAlias.split("\\.");
         if (aliasSplit.length != 2) {
             throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
         }
-        
+
         try {
             final char[] chars = credential.castAndApply(PasswordCredential.class, c -> c.getPassword().castAndApply(ClearPassword.class, ClearPassword::getPassword));
             if (chars == null) {
@@ -202,7 +204,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (credentialAlias == null || credentialAlias.trim().isEmpty()) {
             throw ROOT_LOGGER.credentialAliasRequired();
         }
-        
+
         // Parse credentialAlias in format "path.key"
         String[] aliasSplit = credentialAlias.split("\\.");
         if (aliasSplit.length != 2) {
@@ -216,7 +218,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (credentialType.isInstance(cached)) {
             return credentialType.cast(cached);
         }
-        
+
         try {
             CredentialSource credentialSource = new VaultCredentialSource(vaultConnector, aliasSplit[0], aliasSplit[1]);
             PasswordCredential credential = credentialSource.getCredential(PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
@@ -240,13 +242,13 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (credentialAlias == null || credentialAlias.trim().isEmpty()) {
             throw ROOT_LOGGER.credentialAliasRequired();
         }
-        
+
         // Parse credentialAlias in format "path.key"
         String[] aliasSplit = credentialAlias.split("\\.");
         if (aliasSplit.length != 2) {
             throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
         }
-        
+
         try {
             vaultConnector.removeSecret(aliasSplit[0], aliasSplit[1]);
             synchronized (credentialCache) {

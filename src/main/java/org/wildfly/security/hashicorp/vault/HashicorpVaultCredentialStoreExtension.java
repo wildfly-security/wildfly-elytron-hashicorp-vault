@@ -4,11 +4,12 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import org.wildfly.security.credential.store.CredentialStoreException;
-import org.wildfly.security.credential.store.CredentialStoreExtension;
+import java.util.Set;
 
 import javax.net.ssl.SSLContext;
-import java.util.Set;
+
+import org.wildfly.security.credential.store.CredentialStoreException;
+import org.wildfly.security.credential.store.CredentialStoreExtension;
 
 /**
  * Extension API for Hashicorp Vault credential store. Exposes only store-specific operations

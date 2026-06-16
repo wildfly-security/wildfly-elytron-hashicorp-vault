@@ -4,13 +4,13 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import org.testcontainers.vault.VaultContainer;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.stream.Stream;
+
+import org.testcontainers.vault.VaultContainer;
 
 public class VaultTestUtils {
 

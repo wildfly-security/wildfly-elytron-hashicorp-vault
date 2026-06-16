@@ -14,18 +14,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import io.github.jopenlibs.vault.SslConfig;
-import io.github.jopenlibs.vault.Vault;
-import io.github.jopenlibs.vault.VaultConfig;
-import io.github.jopenlibs.vault.VaultException;
-import io.github.jopenlibs.vault.response.LogicalResponse;
+import javax.net.ssl.SSLContext;
+
 import org.wildfly.security.hashicorp.vault.loginstrategy.ClientCertificateLoginStrategy;
 import org.wildfly.security.hashicorp.vault.loginstrategy.JwtLoginStrategy;
 import org.wildfly.security.hashicorp.vault.loginstrategy.LoginContext;
 import org.wildfly.security.hashicorp.vault.loginstrategy.TokenLoginStrategy;
 import org.wildfly.security.hashicorp.vault.loginstrategy.VaultLoginStrategy;
 
-import javax.net.ssl.SSLContext;
+import io.github.jopenlibs.vault.SslConfig;
+import io.github.jopenlibs.vault.Vault;
+import io.github.jopenlibs.vault.VaultConfig;
+import io.github.jopenlibs.vault.VaultException;
+import io.github.jopenlibs.vault.response.LogicalResponse;
 
 /**
  * Vault Connector
@@ -300,7 +301,7 @@ public class VaultConnector {
         }
         // vault expects trailing slash with list operation
         String listPath = path.endsWith("/") ? path : path + "/";
-        
+
         try {
             LogicalResponse response = this.vault.logical().list(listPath);
             int responseStatus = response.getRestResponse().getStatus();

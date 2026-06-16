@@ -4,15 +4,16 @@
  */
 package org.wildfly.security.hashicorp.vault.auth;
 
-import io.smallrye.certs.PemCertificateFiles;
-import org.testcontainers.utility.MountableFile;
-import org.testcontainers.vault.VaultContainer;
-
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+
+import org.testcontainers.utility.MountableFile;
+import org.testcontainers.vault.VaultContainer;
+
+import io.smallrye.certs.PemCertificateFiles;
 
 /**
  * Utility which will configure a vault container for TLS certificate authentication method.

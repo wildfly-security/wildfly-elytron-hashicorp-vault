@@ -4,11 +4,11 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import org.kohsuke.MetaInfServices;
-import org.wildfly.security.WildFlyElytronBaseProvider;
-
 import java.security.Provider;
 import java.util.Collections;
+
+import org.kohsuke.MetaInfServices;
+import org.wildfly.security.WildFlyElytronBaseProvider;
 
 @MetaInfServices(Provider.class)
 public class HashicorpVaultCredentialStoreProvider extends WildFlyElytronBaseProvider {
@@ -21,7 +21,7 @@ public class HashicorpVaultCredentialStoreProvider extends WildFlyElytronBasePro
      */
     public HashicorpVaultCredentialStoreProvider() {
         super("WildFlyElytronHashicorpVaultProvider", "1.0", "WildFly Elytron HashiCorp Vault CredentialStore Provider");
-        putService(new Service(this, "CredentialStore", "HashicorpVaultCredentialStore", 
+        putService(new Service(this, "CredentialStore", "HashicorpVaultCredentialStore",
                 "org.wildfly.security.hashicorp.vault.HashicorpVaultCredentialStore",
                 Collections.emptyList(), Collections.emptyMap()));
     }

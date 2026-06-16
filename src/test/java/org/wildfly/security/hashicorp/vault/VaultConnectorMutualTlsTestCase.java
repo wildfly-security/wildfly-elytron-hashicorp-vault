@@ -4,6 +4,19 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import javax.net.ssl.SSLContext;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.wildfly.security.hashicorp.vault.auth.TlsCertAuthConfig;
+
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.VaultException;
 import io.smallrye.certs.CertificateFiles;
@@ -11,17 +24,6 @@ import io.smallrye.certs.CertificateGenerator;
 import io.smallrye.certs.CertificateRequest;
 import io.smallrye.certs.Format;
 import io.smallrye.certs.PemCertificateFiles;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.wildfly.security.hashicorp.vault.auth.TlsCertAuthConfig;
-
-import javax.net.ssl.SSLContext;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Negative TLS tests with mutual TLS enforcement ({@code tls_require_and_verify_client_cert = true}).

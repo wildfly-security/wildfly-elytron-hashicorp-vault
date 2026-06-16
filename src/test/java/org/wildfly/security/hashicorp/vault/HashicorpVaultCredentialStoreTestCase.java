@@ -4,6 +4,22 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.wildfly.security.hashicorp.vault.VaultTestUtils.startVaultTestContainer;
+
+import java.security.NoSuchAlgorithmException;
+import java.security.Provider;
+import java.security.spec.InvalidKeySpecException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,22 +35,6 @@ import org.wildfly.security.password.PasswordFactory;
 import org.wildfly.security.password.WildFlyElytronPasswordProvider;
 import org.wildfly.security.password.interfaces.ClearPassword;
 import org.wildfly.security.password.spec.ClearPasswordSpec;
-
-import java.security.NoSuchAlgorithmException;
-import java.security.Provider;
-import java.security.spec.InvalidKeySpecException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.wildfly.security.hashicorp.vault.VaultTestUtils.startVaultTestContainer;
 
 public class HashicorpVaultCredentialStoreTestCase {
 
@@ -179,7 +179,7 @@ public class HashicorpVaultCredentialStoreTestCase {
 
         Set<String> aliases1 = cs.getAliases("secret/testing1");
         Set<String> aliases2 = cs.getAliases("secret/testing1", false, 0);
-        
+
         assertEquals(aliases1, aliases2);
         assertTrue(aliases2.contains("secret/testing1.top_secret"));
     }
@@ -197,7 +197,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("secret/app1/subapp.key3", createCredentialFromPassword("value3"), null);
 
         Set<String> aliases = cs.getAliases("secret/app1", true, 0);
-        
+
         assertTrue(aliases.contains("secret/app1.key1"));
         assertTrue(aliases.contains("secret/app1.key2"));
         // Should NOT include any subpath keys when depth is 0
@@ -340,7 +340,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
         cs.store("secret/app1/subapp1.key3", createCredentialFromPassword("value3"), null);
         Set<String> aliases = cs.getAliases("secret/app1", false, 10, 1);
-        
+
         assertEquals(1, aliases.size());
         assertTrue(aliases.contains("secret/app1.key1") || aliases.contains("secret/app1.key2"));
         assertFalse(aliases.contains("secret/app1/subapp1.key3"));

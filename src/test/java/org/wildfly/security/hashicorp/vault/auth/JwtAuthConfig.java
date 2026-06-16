@@ -4,12 +4,12 @@
  */
 package org.wildfly.security.hashicorp.vault.auth;
 
-import org.testcontainers.vault.VaultContainer;
-
 import java.util.AbstractMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Stream;
+
+import org.testcontainers.vault.VaultContainer;
 
 /**
  * Configure JWT authentication - enable the auth itself and configure a role
