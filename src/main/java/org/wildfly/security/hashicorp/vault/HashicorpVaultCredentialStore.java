@@ -33,7 +33,41 @@ import org.wildfly.security.password.interfaces.ClearPassword;
 import io.github.jopenlibs.vault.SslConfig;
 
 /**
- * Credential store backed by Hashicorp Vault
+ * Credential store backed by HashiCorp Vault.
+ *
+ * <p>This credential store integrates with HashiCorp Vault to securely retrieve credentials.
+ * It supports the new structured alias format with nested JSON path traversal, as well as
+ * optional backward compatibility with the legacy format.
+ *
+ * <h2>Alias Format</h2>
+ * <p>The new alias format is:
+ * <pre>{@code [engine=TYPE][@mount-path][#]secret-path?key-path}</pre>
+ *
+ * <p>Examples:
+ * <ul>
+ *   <li>{@code myapp/database?password} - Simple key</li>
+ *   <li>{@code myapp/config?database/host} - Nested JSON path</li>
+ *   <li>{@code engine=KVv1#old-app/config?api_key} - Explicit engine type</li>
+ *   <li>{@code @prod/secrets#myapp/db?password} - Custom mount path</li>
+ * </ul>
+ *
+ * <h2>Configuration Parameters</h2>
+ * <ul>
+ *   <li>{@code host-address} (required) - Vault server URL</li>
+ *   <li>{@code namespace} (optional) - Vault namespace (Enterprise)</li>
+ *   <li>{@code trust-store-path} (optional) - Path to trust store for TLS</li>
+ *   <li>{@code key-store-path} (optional) - Path to key store for mutual TLS</li>
+ *   <li>{@code key-store-pass} (optional) - Key store password</li>
+ *   <li>{@code trust-store-pass} (optional) - Trust store password</li>
+ *   <li>{@code support-legacy-alias-format} (optional) - Enable legacy format support (default: false)</li>
+ *   <li>{@code default-engine-type} (optional) - Default engine type (default: KVv2)</li>
+ *   <li>{@code default-mount-path} (optional) - Default mount path (default: secret)</li>
+ * </ul>
+ *
+ * <p>For complete documentation, see the project documentation in the {@code docs/} directory.
+ *
+ * @see VaultAlias
+ * @see KeyPathResolver
  */
 public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 

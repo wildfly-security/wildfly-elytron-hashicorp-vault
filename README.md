@@ -5,7 +5,7 @@ A credential store implementation for WildFly that integrates with HashiCorp Vau
 ## Requirements
 
 - HashiCorp Vault server
-- WildFly server 
+- WildFly server
 - Java
 - Maven
 - Vault Java driver
@@ -51,13 +51,13 @@ To test with specific Java versions (17, 21, or 25), you need to set up Maven to
    ```bash
    # Test with Java 17
    mvn clean test -Djdk.test.version=17
-   
+
    # Test with Java 21
    mvn clean test -Djdk.test.version=21
-   
+
    # Test with Java 25 (default)
    mvn clean test -Djdk.test.version=25
-   
+
    # Test with specific distribution
    mvn clean test -Djdk.test.version=21 -Djdk.test.vendor=semeru
    ```
@@ -95,7 +95,7 @@ Example result configuration (`standalone.xml` or `domain.xml`):
 <subsystem xmlns="urn:wildfly:elytron:15.0">
     ...
     <credential-stores>
-        <credential-store name="vault-store" 
+        <credential-store name="vault-store"
                          type="HashicorpVaultCredentialStore"
                          providers="vaultProviderLoader">
             <implementation-properties>
@@ -113,11 +113,36 @@ Example result configuration (`standalone.xml` or `domain.xml`):
 
 ### 2. Use the Credential Store
 
-**Note:** The alias format is: `<vault-path>.<key>`
+Reference credentials from Vault in your WildFly configuration using the alias format.
 
-```bash
-/subsystem=elytron/credential-store=vault-store:add-alias(alias="/secrets/test.db_user", secret-value="db_user_pass")
+#### Alias Format
+
+The credential store supports a structured alias format for referencing secrets:
+
 ```
+[engine=TYPE][@mount-path][#]secret-path?key-path
+```
+
+**Simple examples:**
+```
+myapp/database?password              # Simple key
+myapp/config?database/host           # Nested JSON path
+services?my.app/config.key           # Nested with dots in keys
+```
+
+**Advanced examples:**
+```
+engine=KVv1#old-app/config?api_key   # Specify engine type
+@prod/secrets#myapp/db?password      # Custom mount path
+```
+
+For complete alias format documentation, see [`docs/alias-format.md`](docs/alias-format.md).
+
+#### Legacy Format Support
+
+The legacy format (`secret-path.key`) is supported for backward compatibility when `support-legacy-alias-format` is enabled. See [`docs/migration.md`](docs/migration.md) for migration guidance.
+
+#### Using Credentials
 
 Reference credentials from Vault in your WildFly configuration:
 
@@ -130,7 +155,7 @@ Reference credentials from Vault in your WildFly configuration:
             <driver>postgresql</driver>
             <security>
                 <user-name>dbuser</user-name>
-                <credential-reference store="vault-store" alias="secret/myapp.database_password"/>
+                <credential-reference store="vault-store" alias="myapp/database?password"/>
             </security>
         </datasource>
     </datasources>
@@ -148,7 +173,7 @@ Reference credentials from Vault in your WildFly configuration:
     </security-realms>
     <dir-contexts>
         <dir-context name="ldap-connection" url="ldap://ldap.example.com:389">
-            <credential-reference store="vault-store" alias="secret/ldap.bind_password"/>
+            <credential-reference store="vault-store" alias="ldap/config?bind_password"/>
         </dir-context>
     </dir-contexts>
 </subsystem>
@@ -163,6 +188,19 @@ Reference credentials from Vault in your WildFly configuration:
 | `trustStorePath` | No | Path to trust store for SSL | `/path/to/truststore.jks` |
 | `keyStorePath` | No | Path to key store for client auth | `/path/to/keystore.jks` |
 | `keyStorePass` | No | Key store password | `keystore-password` |
+| `support-legacy-alias-format` | No | Enable legacy format support | `true` or `false` |
+| `default-engine-type` | No | Default secret engine type | `KVv2` (default), `KVv1`, etc. |
+| `default-mount-path` | No | Default mount path | `secret` (default) |
+
+## Documentation
+
+Comprehensive documentation is available in the [`docs/`](docs/) directory:
+
+- **[Alias Format Specification](docs/alias-format.md)** - Complete guide to the alias format syntax, examples, and best practices
+- **[Configuration Guide](docs/configuration.md)** - Detailed configuration parameters and examples
+- **[Migration Guide](docs/migration.md)** - Step-by-step guide for migrating from legacy format
+
+For complete configuration documentation, see [`docs/configuration.md`](docs/configuration.md).
 
 ## Quickstart example
 
