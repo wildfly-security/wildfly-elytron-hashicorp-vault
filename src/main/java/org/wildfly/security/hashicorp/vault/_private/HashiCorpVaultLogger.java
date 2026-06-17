@@ -8,6 +8,7 @@ package org.wildfly.security.hashicorp.vault._private;
 import static org.jboss.logging.Logger.Level.DEBUG;
 import static org.jboss.logging.Logger.Level.ERROR;
 import static org.jboss.logging.Logger.Level.TRACE;
+import static org.jboss.logging.Logger.Level.WARN;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -280,4 +281,10 @@ public interface HashiCorpVaultLogger extends BasicLogger {
 
     @Message(id = 76, value = "Invalid default-engine-type configuration '%s'. Valid values are: KVv1, KVv2")
     CredentialStoreException invalidDefaultEngineType(String engineType);
+
+    // --- Deep nesting warning ---
+
+    @LogMessage(level = WARN)
+    @Message(id = 77, value = "Key path '%s' has deep nesting (%d levels). Consider flattening the JSON structure for better performance and maintainability.")
+    void deepKeyPathNesting(String keyPath, int nestingLevel);
 }

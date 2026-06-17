@@ -69,18 +69,40 @@ class KeyPathResolver {
         }
 
         if (data == null) {
+            ROOT_LOGGER.debugf("Key path '%s' not found - secret data is null", keyPath);
             return null;
         }
+
+        ROOT_LOGGER.debugf("Resolving key path: %s", keyPath);
 
         // Check if key path contains / (nested path)
         if (!keyPath.contains("/")) {
             // Simple key - direct lookup (supports dots in key name)
             Object value = data.get(keyPath);
-            return value != null ? value.toString() : null;
+            if (value == null) {
+                ROOT_LOGGER.debugf("Key path '%s' not found in secret data", keyPath);
+                return null;
+            }
+            if (value instanceof Map) {
+                // Key path is incomplete - points to a nested structure, not a leaf value
+                ROOT_LOGGER.debugf("Key path '%s' points to a nested structure, not a credential value", keyPath);
+                return null;
+            }
+            ROOT_LOGGER.debugf("Key path '%s' resolved successfully", keyPath);
+            return value.toString();
         }
 
         // Nested path - traverse using /
         String[] segments = keyPath.split("/");
+        int nestingLevel = segments.length;
+
+        // Warn about deep nesting (>5 levels)
+        if (nestingLevel > 5) {
+            ROOT_LOGGER.deepKeyPathNesting(keyPath, nestingLevel);
+        }
+
+        ROOT_LOGGER.debugf("Traversing nested key path with %d segments", nestingLevel);
+
         Object current = data;
 
         for (int i = 0; i < segments.length; i++) {
@@ -93,6 +115,7 @@ class KeyPathResolver {
 
             if (!(current instanceof Map)) {
                 // Can't traverse further - not a map
+                ROOT_LOGGER.debugf("Key path '%s' not found - cannot traverse further at segment '%s'", keyPath, segment);
                 return null;
             }
 
@@ -103,11 +126,18 @@ class KeyPathResolver {
             current = currentMap.get(segment);
 
             if (current == null) {
+                ROOT_LOGGER.debugf("Key path '%s' not found - segment '%s' does not exist", keyPath, segment);
                 return null;
             }
 
             // If this is the last segment, return the value
             if (i == segments.length - 1) {
+                if (current instanceof Map) {
+                    // Key path is incomplete - points to a nested structure, not a leaf value
+                    ROOT_LOGGER.debugf("Key path '%s' points to a nested structure, not a credential value", keyPath);
+                    return null;
+                }
+                ROOT_LOGGER.debugf("Key path '%s' resolved successfully", keyPath);
                 return current.toString();
             }
         }

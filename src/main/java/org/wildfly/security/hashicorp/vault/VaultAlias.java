@@ -171,6 +171,8 @@ class VaultAlias {
             throw ROOT_LOGGER.aliasCannotBeNullOrEmpty();
         }
 
+        ROOT_LOGGER.debugf("Parsing alias: %s", alias);
+
         // Use local variables to collect parsed values
         String engineType = defaultEngineType;
         String mountPath = defaultMountPath;
@@ -250,6 +252,9 @@ class VaultAlias {
 
         // Note: The decoded values will be passed to Vault client library,
         // which will handle URL encoding for the actual API calls
+
+        ROOT_LOGGER.debugf("Parsed alias: engine=%s, mount=%s, secret=%s, key=%s",
+                          engineType, mountPath, secretPath, keyPath);
 
         // Create immutable instance with all validated values
         return new VaultAlias(engineType, mountPath, secretPath, keyPath);
