@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.wildfly.security.hashicorp.vault.KvVersionTestHelper.cliGetSecret;
 import static org.wildfly.security.hashicorp.vault.KvVersionTestHelper.cliPutSecret;
 
+import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -20,6 +21,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.testcontainers.containers.Container;
 import org.testcontainers.vault.VaultContainer;
+import org.wildfly.security.credential.store.CredentialStoreException;
 import org.wildfly.security.hashicorp.vault.KvVersionTestHelper.KvVersion;
 
 import io.github.jopenlibs.vault.SslConfig;
@@ -102,6 +104,53 @@ public class VaultCliInteroperabilityTestCase {
     }
 
     // =====================================================================
+    // Helper Methods for API Migration
+    // =====================================================================
+
+    /**
+     * Helper method to get a secret value using the new alias-based API.
+     */
+    private String getSecret(VaultConnector connector, String path, String key, String mountPath, KvVersion version) throws CredentialStoreException {
+        // Extract secret path from full path
+        String secretPath = path.substring(mountPath.length());
+        if (secretPath.startsWith("/")) {
+            secretPath = secretPath.substring(1);
+        }
+
+        // Build alias string
+        String aliasString = "#" + secretPath + "?" + key;
+        String engineType = version == KvVersion.V1 ? "KVv1" : "KVv2";
+
+        // Parse alias and get secret
+        VaultAlias alias = VaultAlias.parse(aliasString, engineType, mountPath);
+        Map<String, Object> data = connector.getSecretData(alias);
+        if (data == null) {
+            return null;
+        }
+
+        return KeyPathResolver.resolveKeyPath(data, key);
+    }
+
+    /**
+     * Helper method to put a secret value using the new alias-based API.
+     */
+    private void putSecret(VaultConnector connector, String path, String key, String value, String mountPath, KvVersion version) throws CredentialStoreException {
+        // Extract secret path from full path
+        String secretPath = path.substring(mountPath.length());
+        if (secretPath.startsWith("/")) {
+            secretPath = secretPath.substring(1);
+        }
+
+        // Build alias string
+        String aliasString = "#" + secretPath + "?" + key;
+        String engineType = version == KvVersion.V1 ? "KVv1" : "KVv2";
+
+        // Parse alias and put secret
+        VaultAlias alias = VaultAlias.parse(aliasString, engineType, mountPath);
+        connector.putSecretData(alias, value);
+    }
+
+    // =====================================================================
     // CLI Write → Java API Read
     // =====================================================================
 
@@ -123,8 +172,8 @@ public class VaultCliInteroperabilityTestCase {
 
         // Read using Java API
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-        String username = connector.getSecret(mountPath + "/cli-test", "username");
-        String password = connector.getSecret(mountPath + "/cli-test", "password");
+        String username = getSecret(connector, mountPath + "/cli-test", "username", mountPath, version);
+        String password = getSecret(connector, mountPath + "/cli-test", "password", mountPath, version);
 
         assertEquals("admin", username,
             String.format("Should read CLI-written username in %s", version));
@@ -153,11 +202,11 @@ public class VaultCliInteroperabilityTestCase {
 
         // Read all keys using Java API
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-        assertEquals("localhost", connector.getSecret(mountPath + "/app-config", "db_host"));
-        assertEquals("5432", connector.getSecret(mountPath + "/app-config", "db_port"));
-        assertEquals("myapp", connector.getSecret(mountPath + "/app-config", "db_name"));
-        assertEquals("appuser", connector.getSecret(mountPath + "/app-config", "db_user"));
-        assertEquals("apppass", connector.getSecret(mountPath + "/app-config", "db_pass"));
+        assertEquals("localhost", getSecret(connector, mountPath + "/app-config", "db_host", mountPath, version));
+        assertEquals("5432", getSecret(connector, mountPath + "/app-config", "db_port", mountPath, version));
+        assertEquals("myapp", getSecret(connector, mountPath + "/app-config", "db_name", mountPath, version));
+        assertEquals("appuser", getSecret(connector, mountPath + "/app-config", "db_user", mountPath, version));
+        assertEquals("apppass", getSecret(connector, mountPath + "/app-config", "db_pass", mountPath, version));
     }
 
     // =====================================================================
@@ -172,8 +221,8 @@ public class VaultCliInteroperabilityTestCase {
 
         // Write secret using Java API
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-        connector.putSecret(mountPath + "/java-test", "api_key", "key123");
-        connector.putSecret(mountPath + "/java-test", "api_secret", "secret456");
+        putSecret(connector, mountPath + "/java-test", "api_key", "key123", mountPath, version);
+        putSecret(connector, mountPath + "/java-test", "api_secret", "secret456", mountPath, version);
 
         // Read using Vault CLI
         Container.ExecResult cliResult = cliGetSecret(vaultContainer, mountPath + "/java-test");
@@ -209,9 +258,9 @@ public class VaultCliInteroperabilityTestCase {
 
         // Write multi-key secret using Java API
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-        connector.putSecret(mountPath + "/service-config", "host", "api.example.com");
-        connector.putSecret(mountPath + "/service-config", "port", "443");
-        connector.putSecret(mountPath + "/service-config", "protocol", "https");
+        putSecret(connector, mountPath + "/service-config", "host", "api.example.com", mountPath, version);
+        putSecret(connector, mountPath + "/service-config", "port", "443", mountPath, version);
+        putSecret(connector, mountPath + "/service-config", "protocol", "https", mountPath, version);
 
         // Read using CLI
         Container.ExecResult cliResult = cliGetSecret(vaultContainer, mountPath + "/service-config");
@@ -252,7 +301,7 @@ public class VaultCliInteroperabilityTestCase {
 
         // Modify using Java API
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-        connector.putSecret(mountPath + "/modify-test", "value", "modified");
+        putSecret(connector, mountPath + "/modify-test", "value", "modified", mountPath, version);
 
         // Verify modification via CLI
         Container.ExecResult cliResult = cliGetSecret(vaultContainer, mountPath + "/modify-test");
@@ -279,7 +328,7 @@ public class VaultCliInteroperabilityTestCase {
 
         // Write initial secret using Java API
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-        connector.putSecret(mountPath + "/modify-test2", "status", "initial");
+        putSecret(connector, mountPath + "/modify-test2", "status", "initial", mountPath, version);
 
         // Modify using CLI
         Container.ExecResult cliResult = cliPutSecret(
@@ -290,7 +339,7 @@ public class VaultCliInteroperabilityTestCase {
         assertEquals(0, cliResult.getExitCode());
 
         // Verify modification via Java API
-        String status = connector.getSecret(mountPath + "/modify-test2", "status");
+        String status = getSecret(connector, mountPath + "/modify-test2", "status", mountPath, version);
         assertEquals("updated", status,
             String.format("Java API should see CLI modification in %s", version));
     }
@@ -306,7 +355,7 @@ public class VaultCliInteroperabilityTestCase {
 
         // Modify one key using Java API
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-        connector.putSecret(mountPath + "/multi-key", "key2", "modified");
+        putSecret(connector, mountPath + "/multi-key", "key2", "modified", mountPath, version);
 
         // Verify all keys via CLI
         Container.ExecResult cliResult = cliGetSecret(vaultContainer, mountPath + "/multi-key");
@@ -349,7 +398,7 @@ public class VaultCliInteroperabilityTestCase {
         String specialValue = "p@ssw0rd!#$%^&*(){}[]|\\:;\"'<>,.?/~`";
 
         // Write using Java API
-        connector.putSecret(mountPath + "/special-chars", "password", specialValue);
+        putSecret(connector, mountPath + "/special-chars", "password", specialValue, mountPath, version);
 
         // Read using CLI
         Container.ExecResult cliResult = cliGetSecret(vaultContainer, mountPath + "/special-chars");
@@ -368,7 +417,7 @@ public class VaultCliInteroperabilityTestCase {
             String.format("Special characters should be preserved in %s", version));
 
         // Verify round-trip via Java API
-        String retrieved = connector.getSecret(mountPath + "/special-chars", "password");
+        String retrieved = getSecret(connector, mountPath + "/special-chars", "password", mountPath, version);
         assertEquals(specialValue, retrieved,
             String.format("Special characters should round-trip correctly in %s", version));
     }
@@ -382,7 +431,7 @@ public class VaultCliInteroperabilityTestCase {
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Write empty value using Java API
-        connector.putSecret(mountPath + "/empty-test", "empty_key", "");
+        putSecret(connector, mountPath + "/empty-test", "empty_key", "", mountPath, version);
 
         // Read using CLI
         Container.ExecResult cliResult = cliGetSecret(vaultContainer, mountPath + "/empty-test");
@@ -403,5 +452,3 @@ public class VaultCliInteroperabilityTestCase {
             String.format("Empty value should be preserved in %s", version));
     }
 }
-
-// Made with Bob

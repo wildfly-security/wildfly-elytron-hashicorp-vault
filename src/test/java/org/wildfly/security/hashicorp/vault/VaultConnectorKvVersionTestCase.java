@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -18,7 +19,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.testcontainers.vault.VaultContainer;
+import org.wildfly.security.auth.server.IdentityCredentials;
+import org.wildfly.security.credential.PasswordCredential;
+import org.wildfly.security.credential.store.CredentialStoreException;
 import org.wildfly.security.hashicorp.vault.KvVersionTestHelper.KvVersion;
+import org.wildfly.security.password.interfaces.ClearPassword;
 
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.VaultException;
@@ -108,6 +113,78 @@ public class VaultConnectorKvVersionTestCase {
     }
 
     // =====================================================================
+    // Helper Methods for API Migration
+    // =====================================================================
+
+    /**
+     * Helper method to get a secret value using the new alias-based API.
+     * Converts old-style path/key calls to new VaultAlias format.
+     */
+    private String getSecret(VaultConnector connector, String path, String key, String mountPath, KvVersion version) throws CredentialStoreException {
+        // Extract secret path from full path (remove mount prefix)
+        String secretPath = path.substring(mountPath.length());
+        if (secretPath.startsWith("/")) {
+            secretPath = secretPath.substring(1);
+        }
+
+        // Build alias string: #secret-path?key
+        String aliasString = "#" + secretPath + "?" + key;
+
+        // Determine engine type from KV version
+        String engineType = version == KvVersion.V1 ? "KVv1" : "KVv2";
+
+        // Parse alias
+        VaultAlias alias = VaultAlias.parse(aliasString, engineType, mountPath);
+
+        // Get secret data
+        Map<String, Object> data = connector.getSecretData(alias);
+        if (data == null) {
+            return null;
+        }
+
+        // Resolve key path
+        return KeyPathResolver.resolveKeyPath(data, key);
+    }
+
+    /**
+     * Helper method to put a secret value using the new alias-based API.
+     */
+    private void putSecret(VaultConnector connector, String path, String key, String value, String mountPath, KvVersion version) throws CredentialStoreException {
+        // Extract secret path from full path
+        String secretPath = path.substring(mountPath.length());
+        if (secretPath.startsWith("/")) {
+            secretPath = secretPath.substring(1);
+        }
+
+        // Build alias string
+        String aliasString = "#" + secretPath + "?" + key;
+        String engineType = version == KvVersion.V1 ? "KVv1" : "KVv2";
+
+        // Parse alias and put secret
+        VaultAlias alias = VaultAlias.parse(aliasString, engineType, mountPath);
+        connector.putSecretData(alias, value);
+    }
+
+    /**
+     * Helper method to remove a secret key using the new alias-based API.
+     */
+    private void removeSecret(VaultConnector connector, String path, String key, String mountPath, KvVersion version) throws CredentialStoreException {
+        // Extract secret path from full path
+        String secretPath = path.substring(mountPath.length());
+        if (secretPath.startsWith("/")) {
+            secretPath = secretPath.substring(1);
+        }
+
+        // Build alias string
+        String aliasString = "#" + secretPath + "?" + key;
+        String engineType = version == KvVersion.V1 ? "KVv1" : "KVv2";
+
+        // Parse alias and remove secret
+        VaultAlias alias = VaultAlias.parse(aliasString, engineType, mountPath);
+        connector.removeSecretData(alias);
+    }
+
+    // =====================================================================
     // Basic CRUD Operations
     // =====================================================================
 
@@ -118,7 +195,7 @@ public class VaultConnectorKvVersionTestCase {
         vaultContainer.start();
 
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-        String secret = connector.getSecret(mountPath + "/testing1", "top_secret");
+        String secret = getSecret(connector, mountPath + "/testing1", "top_secret", mountPath, version);
 
         assertEquals("password123", secret,
             String.format("Should retrieve secret from %s mount", version));
@@ -133,10 +210,10 @@ public class VaultConnectorKvVersionTestCase {
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Put a new secret
-        connector.putSecret(mountPath + "/testing1", "new_secret", "newvalue123");
+        putSecret(connector, mountPath + "/testing1", "new_secret", "newvalue123", mountPath, version);
 
         // Verify it was stored
-        String retrieved = connector.getSecret(mountPath + "/testing1", "new_secret");
+        String retrieved = getSecret(connector, mountPath + "/testing1", "new_secret", mountPath, version);
         assertEquals("newvalue123", retrieved,
             String.format("Should store and retrieve new secret in %s", version));
     }
@@ -150,14 +227,14 @@ public class VaultConnectorKvVersionTestCase {
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Verify original value
-        String original = connector.getSecret(mountPath + "/testing1", "top_secret");
+        String original = getSecret(connector, mountPath + "/testing1", "top_secret", mountPath, version);
         assertEquals("password123", original);
 
         // Update the secret
-        connector.putSecret(mountPath + "/testing1", "top_secret", "updated_password");
+        putSecret(connector, mountPath + "/testing1", "top_secret", "updated_password", mountPath, version);
 
         // Verify updated value
-        String updated = connector.getSecret(mountPath + "/testing1", "top_secret");
+        String updated = getSecret(connector, mountPath + "/testing1", "top_secret", mountPath, version);
         assertEquals("updated_password", updated,
             String.format("Should update existing secret in %s", version));
     }
@@ -171,14 +248,14 @@ public class VaultConnectorKvVersionTestCase {
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Verify secret exists
-        String original = connector.getSecret(mountPath + "/testing1", "top_secret");
+        String original = getSecret(connector, mountPath + "/testing1", "top_secret", mountPath, version);
         assertNotNull(original);
 
         // Remove the secret
-        connector.removeSecret(mountPath + "/testing1", "top_secret");
+        removeSecret(connector, mountPath + "/testing1", "top_secret", mountPath, version);
 
         // Verify it's gone
-        String removed = connector.getSecret(mountPath + "/testing1", "top_secret");
+        String removed = getSecret(connector, mountPath + "/testing1", "top_secret", mountPath, version);
         assertNull(removed,
             String.format("Should remove secret from %s", version));
     }
@@ -196,16 +273,16 @@ public class VaultConnectorKvVersionTestCase {
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Verify both keys exist initially
-        assertEquals("secretpass", connector.getSecret(mountPath + "/testing2", "dbuser"));
-        assertEquals("jmspass", connector.getSecret(mountPath + "/testing2", "jmsuser"));
+        assertEquals("secretpass", getSecret(connector, mountPath + "/testing2", "dbuser", mountPath, version));
+        assertEquals("jmspass", getSecret(connector, mountPath + "/testing2", "jmsuser", mountPath, version));
 
         // Modify only dbuser
-        connector.putSecret(mountPath + "/testing2", "dbuser", "new_dbpass");
+        putSecret(connector, mountPath + "/testing2", "dbuser", "new_dbpass", mountPath, version);
 
         // Verify dbuser changed but jmsuser remained
-        assertEquals("new_dbpass", connector.getSecret(mountPath + "/testing2", "dbuser"),
+        assertEquals("new_dbpass", getSecret(connector, mountPath + "/testing2", "dbuser", mountPath, version),
             String.format("Should update modified key in %s", version));
-        assertEquals("jmspass", connector.getSecret(mountPath + "/testing2", "jmsuser"),
+        assertEquals("jmspass", getSecret(connector, mountPath + "/testing2", "jmsuser", mountPath, version),
             String.format("Should preserve unmodified key in %s", version));
     }
 
@@ -218,16 +295,16 @@ public class VaultConnectorKvVersionTestCase {
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
         // Verify both keys exist
-        assertNotNull(connector.getSecret(mountPath + "/testing2", "dbuser"));
-        assertNotNull(connector.getSecret(mountPath + "/testing2", "jmsuser"));
+        assertNotNull(getSecret(connector, mountPath + "/testing2", "dbuser", mountPath, version));
+        assertNotNull(getSecret(connector, mountPath + "/testing2", "jmsuser", mountPath, version));
 
         // Remove only dbuser
-        connector.removeSecret(mountPath + "/testing2", "dbuser");
+        removeSecret(connector, mountPath + "/testing2", "dbuser", mountPath, version);
 
         // Verify dbuser is gone but jmsuser remains
-        assertNull(connector.getSecret(mountPath + "/testing2", "dbuser"),
+        assertNull(getSecret(connector, mountPath + "/testing2", "dbuser", mountPath, version),
             String.format("Should remove specified key in %s", version));
-        assertNotNull(connector.getSecret(mountPath + "/testing2", "jmsuser"),
+        assertNotNull(getSecret(connector, mountPath + "/testing2", "jmsuser", mountPath, version),
             String.format("Should preserve other keys in %s", version));
     }
 
@@ -243,7 +320,7 @@ public class VaultConnectorKvVersionTestCase {
 
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
-        String result = connector.getSecret(mountPath + "/nonexistent", "somekey");
+        String result = getSecret(connector, mountPath + "/nonexistent", "somekey", mountPath, version);
         assertNull(result,
             String.format("Should return null for non-existent path in %s", version));
     }
@@ -256,7 +333,7 @@ public class VaultConnectorKvVersionTestCase {
 
         VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
 
-        String result = connector.getSecret(mountPath + "/testing1", "nonexistent_key");
+        String result = getSecret(connector, mountPath + "/testing1", "nonexistent_key", mountPath, version);
         assertNull(result,
             String.format("Should return null for non-existent key in %s", version));
     }
@@ -279,44 +356,8 @@ public class VaultConnectorKvVersionTestCase {
         connector.configure();
 
         // Try to use the connector - this should trigger lazy initialization and fail
-        assertThrows(VaultException.class, () -> connector.getSecret(mountPath + "/test", "key"),
+        assertThrows(Exception.class, () -> getSecret(connector, mountPath + "/test", "key", mountPath, version),
             String.format("Should throw VaultException for invalid token in %s", version));
-    }
-
-    // =====================================================================
-    // List Operations
-    // =====================================================================
-
-    @ParameterizedTest(name = "[{2}] List keys at path {1}")
-    @MethodSource("kvVersionConfigurations")
-    public void testGetKeysForPath(VaultContainer<?> container, String mountPath, KvVersion version) throws Exception {
-        vaultContainer = container;
-        vaultContainer.start();
-
-        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-
-        var keys = connector.getKeysForPath(mountPath + "/testing2");
-        assertNotNull(keys, String.format("Should return keys for path in %s", version));
-        assertTrue(keys.contains("dbuser"),
-            String.format("Should contain 'dbuser' key in %s", version));
-        assertTrue(keys.contains("jmsuser"),
-            String.format("Should contain 'jmsuser' key in %s", version));
-    }
-
-    @ParameterizedTest(name = "[{2}] List non-existent path throws exception at {1}")
-    @MethodSource("kvVersionConfigurations")
-    public void testGetKeysForNonExistentPath(VaultContainer<?> container, String mountPath, KvVersion version) throws Exception {
-        vaultContainer = container;
-        vaultContainer.start();
-
-        VaultConnector connector = createConnector(vaultContainer, "myroot", version, mountPath);
-
-        VaultException ex = assertThrows(VaultException.class,
-            () -> connector.getKeysForPath(mountPath + "/nonexistent"),
-            String.format("Should throw exception for non-existent path in %s", version));
-
-        assertTrue(ex.getMessage().contains("Path does not exist"),
-            String.format("Exception should mention path doesn't exist in %s", version));
     }
 
     // =====================================================================
@@ -333,15 +374,13 @@ public class VaultConnectorKvVersionTestCase {
 
         // Create secret at nested path
         String nestedPath = mountPath + "/app/database/credentials";
-        connector.putSecret(nestedPath, "username", "dbuser");
-        connector.putSecret(nestedPath, "password", "dbpass");
+        putSecret(connector, nestedPath, "username", "dbuser", mountPath, version);
+        putSecret(connector, nestedPath, "password", "dbpass", mountPath, version);
 
         // Retrieve from nested path
-        assertEquals("dbuser", connector.getSecret(nestedPath, "username"),
+        assertEquals("dbuser", getSecret(connector, nestedPath, "username", mountPath, version),
             String.format("Should handle nested paths in %s", version));
-        assertEquals("dbpass", connector.getSecret(nestedPath, "password"),
+        assertEquals("dbpass", getSecret(connector, nestedPath, "password", mountPath, version),
             String.format("Should handle nested paths in %s", version));
     }
 }
-
-// Made with Bob

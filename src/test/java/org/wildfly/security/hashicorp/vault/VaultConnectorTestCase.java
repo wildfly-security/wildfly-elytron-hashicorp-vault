@@ -9,9 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.vault.VaultContainer;
+import org.wildfly.security.credential.store.CredentialStoreException;
 
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.VaultException;
@@ -19,6 +22,51 @@ import io.github.jopenlibs.vault.VaultException;
 public class VaultConnectorTestCase {
 
     VaultContainer<?> vaultTestContainer;
+
+    /**
+     * Helper method to get a secret value using the new alias-based API.
+     * Converts old-style path+key calls to new VaultAlias format.
+     *
+     * @param connector the VaultConnector instance
+     * @param path the full path (e.g., "secret/testing1")
+     * @param key the key name
+     * @return the secret value, or null if not found
+     */
+    private String getSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        // Extract mount path and secret path from full path
+        // Assuming default mount "secret" for these tests
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        Map<String, Object> data = connector.getSecretData(alias);
+        if (data == null) {
+            return null;
+        }
+        return KeyPathResolver.resolveKeyPath(data, key);
+    }
+
+    /**
+     * Helper method to put a secret value using the new alias-based API.
+     */
+    private void putSecret(VaultConnector connector, String path, String key, String value) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        connector.putSecretData(alias, value);
+    }
+
+    /**
+     * Helper method to remove a secret value using the new alias-based API.
+     */
+    private void removeSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        connector.removeSecretData(alias);
+    }
 
     @AfterEach
     public void cleanup() {
@@ -48,7 +96,7 @@ public class VaultConnectorTestCase {
         // Test vault service
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true).build(), true);
         vaultService.configure();
-        assertEquals("password123", vaultService.getSecret("secret/testing1", "top_secret"));
+        assertEquals("password123", getSecret(vaultService, "secret/testing1", "top_secret"));
     }
 
     @Test
@@ -59,9 +107,9 @@ public class VaultConnectorTestCase {
         // Test vault service
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "secret/testing1", new SslConfig().verify(true).build(), true);
         vaultService.configure();
-        vaultService.putSecret("secret/testing1", "top_secret2", "password2");
+        putSecret(vaultService, "secret/testing1", "top_secret2", "password2");
 
-        assertEquals("password2", vaultService.getSecret("secret/testing1", "top_secret2"));
+        assertEquals("password2", getSecret(vaultService, "secret/testing1", "top_secret2"));
     }
 
     @Test
@@ -74,13 +122,13 @@ public class VaultConnectorTestCase {
         vaultService.configure();
 
         // First verify the secret exists
-        String originalSecret = vaultService.getSecret("secret/testing1", "top_secret");
+        String originalSecret = getSecret(vaultService, "secret/testing1", "top_secret");
         assertEquals("password123", originalSecret);
 
         // Remove the secret
-        vaultService.removeSecret("secret/testing1", "top_secret");
+        removeSecret(vaultService, "secret/testing1", "top_secret");
 
-        assertNull(vaultService.getSecret("secret/testing1", "top_secret"));
+        assertNull(getSecret(vaultService, "secret/testing1", "top_secret"));
         // If we get here, the test should fail because exception was expected
 
     }
@@ -101,8 +149,8 @@ public class VaultConnectorTestCase {
         // Test vault service with incorrect token - this should throw VaultException when attempting to use it
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "incorrect-token", "admin", new SslConfig().verify(true).build(), true);
         vaultService.configure();
-        assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"),
-                "VaultException should be thrown due to authentication failure");
+        assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"),
+                "CredentialStoreException should be thrown due to authentication failure");
     }
 
     @Test
@@ -113,7 +161,7 @@ public class VaultConnectorTestCase {
         // Test vault service
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "admin", new SslConfig().verify(true).build(), true);
         vaultService.configure();
-        vaultService.removeSecret("secret/testing1", "top_secret");
+        removeSecret(vaultService, "secret/testing1", "top_secret");
     }
 
     // =====================================================================
@@ -164,7 +212,7 @@ public class VaultConnectorTestCase {
                 vaultTestContainer.getHttpHostAddress(), "myroot", "admin",
                 new SslConfig().verify(true).build(), true);
         connector.configure();
-        assertNull(connector.getSecret("secret/nonexistent", "somekey"));
+        assertNull(getSecret(connector, "secret/nonexistent", "somekey"));
     }
 
     /**
@@ -175,8 +223,8 @@ public class VaultConnectorTestCase {
     public void testGetSecretForbiddenWithRestrictedToken() throws Exception {
         startVaultWithRestrictedPolicy();
         VaultConnector connector = createRestrictedConnector();
-        VaultException ex = assertThrows(VaultException.class,
-                () -> connector.getSecret("secret/my-secret", "my-value"));
+        CredentialStoreException ex = assertThrows(CredentialStoreException.class,
+                () -> getSecret(connector, "secret/my-secret", "my-value"));
         assertTrue(ex.getMessage().contains("Forbidden") || ex.getMessage().contains("403"),
                 "Expected 'Forbidden' or '403' in message, got: " + ex.getMessage());
     }
@@ -189,8 +237,8 @@ public class VaultConnectorTestCase {
     public void testPutSecretForbiddenWithRestrictedToken() throws Exception {
         startVaultWithRestrictedPolicy();
         VaultConnector connector = createRestrictedConnector();
-        VaultException ex = assertThrows(VaultException.class,
-                () -> connector.putSecret("secret/testing1", "newkey", "newvalue"));
+        CredentialStoreException ex = assertThrows(CredentialStoreException.class,
+                () -> putSecret(connector, "secret/testing1", "newkey", "newvalue"));
         assertTrue(ex.getMessage().contains("Forbidden") || ex.getMessage().contains("403"),
                 "Expected 'Forbidden' or '403' in message, got: " + ex.getMessage());
     }
@@ -203,8 +251,8 @@ public class VaultConnectorTestCase {
     public void testRemoveSecretForbiddenOnDeleteWithRestrictedToken() throws Exception {
         startVaultWithRestrictedPolicy();
         VaultConnector connector = createRestrictedConnector();
-        VaultException ex = assertThrows(VaultException.class,
-                () -> connector.removeSecret("secret/testing1", "top_secret"));
+        CredentialStoreException ex = assertThrows(CredentialStoreException.class,
+                () -> removeSecret(connector, "secret/testing1", "top_secret"));
         assertTrue(ex.getMessage().contains("Forbidden") || ex.getMessage().contains("403"),
                 "Expected 'Forbidden' or '403' in message, got: " + ex.getMessage());
     }
@@ -217,57 +265,14 @@ public class VaultConnectorTestCase {
     public void testRemoveSecretForbiddenOnWriteBackWithRestrictedToken() throws Exception {
         startVaultWithRestrictedPolicy();
         VaultConnector connector = createRestrictedConnector();
-        VaultException ex = assertThrows(VaultException.class,
-                () -> connector.removeSecret("secret/testing2", "dbuser"));
+        CredentialStoreException ex = assertThrows(CredentialStoreException.class,
+                () -> removeSecret(connector, "secret/testing2", "dbuser"));
         assertTrue(ex.getMessage().contains("Forbidden") || ex.getMessage().contains("403"),
                 "Expected 'Forbidden' or '403' in message, got: " + ex.getMessage());
     }
 
-    /**
-     * Read keys from a non-existent path.
-     * Test passes when {@link VaultException} is thrown with a "Path does not exist" message.
-     */
-    @Test
-    public void testGetKeysForPathThrowsForNonExistentPath() throws Exception {
-        startVaultTestContainer();
-        VaultConnector connector = new VaultConnector(
-                vaultTestContainer.getHttpHostAddress(), "myroot", "admin",
-                new SslConfig().verify(true).build(), true);
-        connector.configure();
-        VaultException ex = assertThrows(VaultException.class,
-                () -> connector.getKeysForPath("secret/nonexistent"));
-        assertTrue(ex.getMessage().contains("Path does not exist"),
-                "Expected 'Path does not exist' in message, got: " + ex.getMessage());
-    }
-
-    /**
-     * List items at a path using a token that has no list capability.
-     * Test passes when {@link VaultException} is thrown indicating forbidden access.
-     */
-    @Test
-    public void testListAllItemsAtPathForbiddenWithRestrictedToken() throws Exception {
-        startVaultWithRestrictedPolicy();
-        VaultConnector connector = createRestrictedConnector();
-        VaultException ex = assertThrows(VaultException.class,
-                () -> connector.listAllItemsAtPath("secret/"));
-        assertTrue(ex.getMessage().contains("Forbidden") || ex.getMessage().contains("403"),
-                "Expected 'Forbidden' or '403' in message, got: " + ex.getMessage());
-    }
-
-    /**
-     * List items at a non-existent path.
-     * Test passes when {@link VaultException} is thrown with a "Path not found" message.
-     */
-    @Test
-    public void testListAllItemsAtPathThrowsForNonExistentPath() throws Exception {
-        startVaultTestContainer();
-        VaultConnector connector = new VaultConnector(
-                vaultTestContainer.getHttpHostAddress(), "myroot", "admin",
-                new SslConfig().verify(true).build(), true);
-        connector.configure();
-        VaultException ex = assertThrows(VaultException.class,
-                () -> connector.listAllItemsAtPath("secret/metadata/nonexistent/deep"));
-        assertTrue(ex.getMessage().contains("Path not found") || ex.getMessage().contains("404"),
-                "Expected 'Path not found' or '404' in message, got: " + ex.getMessage());
-    }
+    // NOTE: Tests for getKeysForPath() and listAllItemsAtPath() have been removed
+    // as these methods are no longer part of the VaultConnector API.
+    // The new alias-based API focuses on individual secret operations rather than
+    // path-level listing operations.
 }

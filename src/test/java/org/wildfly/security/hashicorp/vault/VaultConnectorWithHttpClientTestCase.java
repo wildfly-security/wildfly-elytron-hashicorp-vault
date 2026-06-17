@@ -7,6 +7,8 @@ package org.wildfly.security.hashicorp.vault;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.util.Map;
+
 import javax.net.ssl.SSLContext;
 
 import org.junit.jupiter.api.AfterEach;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.wildfly.security.credential.store.CredentialStoreException;
 import org.wildfly.security.hashicorp.vault.auth.TlsCertAuthConfig;
 
 import io.github.jopenlibs.vault.SslConfig;
@@ -62,12 +65,36 @@ public class VaultConnectorWithHttpClientTestCase {
     }
 
     /**
+     * Helper method to get a secret value using the new alias-based API.
+     */
+    private String getSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        Map<String, Object> data = connector.getSecretData(alias);
+        if (data == null) {
+            return null;
+        }
+        return KeyPathResolver.resolveKeyPath(data, key);
+    }
+
+    /**
+     * Helper method to remove a secret value using the new alias-based API.
+     */
+    private void removeSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        connector.removeSecretData(alias);
+    }
+
+    /**
      * VaultConnector#getSecret test with SSLContext and TLS client auth, without token
      */
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"  ", "\t", "\n"})
-    public void testGetSecretWithHttpClientTlsAuth(final String token) throws VaultException {
+    public void testGetSecretWithHttpClientTlsAuth(final String token) throws Exception {
         SslConfig sslConfig = new SslConfig().verify(true).build();
         VaultConnector connector = new VaultConnector(
                 vaultTestContainer.composeHttpsHostAddress(),
@@ -77,14 +104,14 @@ public class VaultConnectorWithHttpClientTestCase {
                 true,
                 sslContext);
         connector.configure();
-        assertEquals("password123", connector.getSecret("secret/testing1", "top_secret"));
+        assertEquals("password123", getSecret(connector, "secret/testing1", "top_secret"));
     }
 
     /**
      * VaultConnector with SSLContext and TLS client auth, remove secret test
      */
     @Test
-    public void testRemoveSecretWithHttpClientTlsAuth() throws VaultException {
+    public void testRemoveSecretWithHttpClientTlsAuth() throws Exception {
         SslConfig sslConfig = new SslConfig().verify(true).build();
         VaultConnector connector = new VaultConnector(
                 vaultTestContainer.composeHttpsHostAddress(),
@@ -94,9 +121,9 @@ public class VaultConnectorWithHttpClientTestCase {
                 true,
                 sslContext);
         connector.configure();
-        assertEquals("password123", connector.getSecret("secret/testing1", "top_secret"));
-        connector.removeSecret("secret/testing1", "top_secret");
-        assertNull(connector.getSecret("secret/testing1", "top_secret"));
+        assertEquals("password123", getSecret(connector, "secret/testing1", "top_secret"));
+        removeSecret(connector, "secret/testing1", "top_secret");
+        assertNull(getSecret(connector, "secret/testing1", "top_secret"));
     }
 
 }

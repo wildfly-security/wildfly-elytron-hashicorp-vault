@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.wildfly.security.credential.store.CredentialStoreException;
 import org.wildfly.security.hashicorp.vault.auth.TlsCertAuthConfig;
 
 import io.github.jopenlibs.vault.SslConfig;
@@ -75,16 +77,40 @@ public class VaultConnectorTlsAuthTestCase {
     }
 
     /**
+     * Helper method to get a secret value using the new alias-based API.
+     */
+    private String getSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        Map<String, Object> data = connector.getSecretData(alias);
+        if (data == null) {
+            return null;
+        }
+        return KeyPathResolver.resolveKeyPath(data, key);
+    }
+
+    /**
+     * Helper method to remove a secret value using the new alias-based API.
+     */
+    private void removeSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        connector.removeSecretData(alias);
+    }
+
+    /**
      * Configure vault connector with proper SSL config and no token and obtain a secret from the vault.
      * Test will succeed when connector properly uses login by crt auth method and reuses obtained token.
      */
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"  ", "\t", "\n"})
-    public void testGetSecretFromVaultService(final String token) throws VaultException {
+    public void testGetSecretFromVaultService(final String token) throws Exception {
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), token, "secret/testing1", permissibleSslAuthConfig, true);
         vaultService.configure();
-        assertEquals("password123", vaultService.getSecret("secret/testing1", "top_secret"));
+        assertEquals("password123", getSecret(vaultService, "secret/testing1", "top_secret"));
     }
 
     /**
@@ -95,7 +121,7 @@ public class VaultConnectorTlsAuthTestCase {
     public void testGetSecretFromVaultServiceInvalidToken() throws Exception {
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "invalidToken", "secret/testing1", new SslConfig().verify(true), true);
         vaultService.configure();
-        assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"),
+        assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"),
                 "Correct SSL auth config was provided but token was non-empty and invalid. This should fail.");
     }
 
@@ -109,12 +135,12 @@ public class VaultConnectorTlsAuthTestCase {
         final VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", permissibleSslAuthConfig, true);
         vaultService.configure();
 
-        final String originalSecret = vaultService.getSecret("secret/testing1", "top_secret");
+        final String originalSecret = getSecret(vaultService, "secret/testing1", "top_secret");
         assertEquals("password123", originalSecret);
 
-        vaultService.removeSecret("secret/testing1", "top_secret");
+        removeSecret(vaultService, "secret/testing1", "top_secret");
 
-        assertNull(vaultService.getSecret("secret/testing1", "top_secret"));
+        assertNull(getSecret(vaultService, "secret/testing1", "top_secret"));
     }
 
     /**
@@ -145,7 +171,7 @@ public class VaultConnectorTlsAuthTestCase {
             VaultConnector vaultService = new VaultConnector(
                     vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", wrongClientConfig, true);
             vaultService.configure();
-            assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"));
+            assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }
@@ -166,6 +192,6 @@ public class VaultConnectorTlsAuthTestCase {
         VaultConnector vaultService = new VaultConnector(
                 vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", trustOnlyConfig, true);
         vaultService.configure();
-        assertThrows(VaultException.class, () -> vaultService.getSecret("secret/testing1", "top_secret"));
+        assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"));
     }
 }
