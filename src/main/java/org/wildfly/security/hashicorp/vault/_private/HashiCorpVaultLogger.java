@@ -227,4 +227,39 @@ public interface HashiCorpVaultLogger extends BasicLogger {
 
     @Message(id = 60, value = "No authentication method configured: provide either a vault token (via credential-reference) or TLS client certificate authentication (via authentication-context)")
     CredentialStoreException noAuthenticationMethodConfigured();
+
+    // --- Alias parsing errors ---
+
+    @Message(id = 61, value = "Alias cannot be null or empty")
+    IllegalArgumentException aliasCannotBeNullOrEmpty();
+
+    @Message(id = 62, value = "Invalid engine specification: missing delimiter after 'engine=' in alias: %s")
+    IllegalArgumentException invalidEngineSpecificationMissingDelimiter(String alias);
+
+    @Message(id = 63, value = "Engine type cannot be empty in alias: %s")
+    IllegalArgumentException engineTypeCannotBeEmpty(String alias);
+
+    @Message(id = 64, value = "Missing '#' delimiter after mount path in alias: %s")
+    IllegalArgumentException missingHashDelimiterAfterMountPath(String alias);
+
+    @Message(id = 65, value = "Mount path cannot be empty after '@' in alias: %s")
+    IllegalArgumentException mountPathCannotBeEmpty(String alias);
+
+    @Message(id = 66, value = "Secret path must start with '#' in alias: %s")
+    IllegalArgumentException secretPathMustStartWithHash(String alias);
+
+    @Message(id = 67, value = "Missing '?' delimiter before key path in alias: %s")
+    IllegalArgumentException missingQuestionDelimiterBeforeKeyPath(String alias);
+
+    @Message(id = 68, value = "Secret path cannot be empty in alias: %s")
+    IllegalArgumentException secretPathCannotBeEmpty(String alias);
+
+    @Message(id = 69, value = "Key path cannot be empty in alias: %s")
+    IllegalArgumentException keyPathCannotBeEmpty(String alias);
+
+    @Message(id = 70, value = "Key path cannot be null or empty")
+    IllegalArgumentException keyPathCannotBeNullOrEmpty();
+
+    @Message(id = 71, value = "Key path contains empty segment: %s")
+    IllegalArgumentException keyPathContainsEmptySegment(String keyPath);
 }
