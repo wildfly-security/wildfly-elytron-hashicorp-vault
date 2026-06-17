@@ -274,4 +274,10 @@ public interface HashiCorpVaultLogger extends BasicLogger {
 
     @Message(id = 74, value = "Invalid alias format: %s. Expected format: [engine=TYPE][@mount-path][#]secret-path?key-path (# is optional when no engine= or @ prefix)")
     IllegalArgumentException invalidAliasFormat(String alias);
+
+    @Message(id = 75, value = "Invalid engine type '%s'. Valid values are: KVv1, KVv2")
+    IllegalArgumentException invalidEngineType(String engineType);
+
+    @Message(id = 76, value = "Invalid default-engine-type configuration '%s'. Valid values are: KVv1, KVv2")
+    CredentialStoreException invalidDefaultEngineType(String engineType);
 }

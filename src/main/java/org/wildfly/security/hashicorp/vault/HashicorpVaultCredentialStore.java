@@ -112,6 +112,10 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
         if (attributes.get("default-engine-type") != null) {
             this.defaultEngineType = attributes.get("default-engine-type");
+            // Validate engine type
+            if (!this.defaultEngineType.equals("KVv1") && !this.defaultEngineType.equals("KVv2")) {
+                throw ROOT_LOGGER.invalidDefaultEngineType(this.defaultEngineType);
+            }
         }
 
         if (attributes.get("default-mount-path") != null) {

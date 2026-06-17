@@ -225,6 +225,11 @@ class VaultAlias {
         result.secretPath = urlDecode(result.secretPath);
         result.keyPath = urlDecode(result.keyPath);
 
+        // 7. Validate engine type after URL decoding (in case someone URL-encodes the engine type)
+        if (!result.engineType.equals("KVv1") && !result.engineType.equals("KVv2")) {
+            throw ROOT_LOGGER.invalidEngineType(result.engineType);
+        }
+
         // Note: The decoded values will be passed to Vault client library,
         // which will handle URL encoding for the actual API calls
 
