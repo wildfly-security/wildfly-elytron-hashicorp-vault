@@ -34,15 +34,24 @@ import org.wildfly.security.credential.store.CredentialStoreException;
  */
 class VaultAlias {
 
-    private String engineType;
-    private String mountPath;
-    private String secretPath;
-    private String keyPath;
+    private final String engineType;
+    private final String mountPath;
+    private final String secretPath;
+    private final String keyPath;
 
     /**
      * Private constructor - use {@link #parse(String)} or {@link #parse(String, String, String)} to create instances.
+     *
+     * @param engineType the engine type (KVv1 or KVv2)
+     * @param mountPath the mount path
+     * @param secretPath the secret path
+     * @param keyPath the key path
      */
-    private VaultAlias() {
+    private VaultAlias(String engineType, String mountPath, String secretPath, String keyPath) {
+        this.engineType = engineType;
+        this.mountPath = mountPath;
+        this.secretPath = secretPath;
+        this.keyPath = keyPath;
     }
 
     /**
@@ -107,29 +116,27 @@ class VaultAlias {
         }
 
         // Parse as legacy format and log deprecation warning
-        VaultAlias result = new VaultAlias();
-        result.engineType = defaultEngineType;
-        result.mountPath = defaultMountPath;
-        result.secretPath = alias.substring(0, lastDot);
-        result.keyPath = alias.substring(lastDot + 1);
+        String secretPath = alias.substring(0, lastDot);
+        String keyPath = alias.substring(lastDot + 1);
 
         // Validate
-        if (result.secretPath.isEmpty()) {
+        if (secretPath.isEmpty()) {
             throw ROOT_LOGGER.secretPathCannotBeEmpty(alias);
         }
-        if (result.keyPath.isEmpty()) {
+        if (keyPath.isEmpty()) {
             throw ROOT_LOGGER.keyPathCannotBeEmpty(alias);
         }
 
         // URL-decode segments (legacy format may also have URL encoding)
-        result.secretPath = urlDecode(result.secretPath);
-        result.keyPath = urlDecode(result.keyPath);
+        secretPath = urlDecode(secretPath);
+        keyPath = urlDecode(keyPath);
 
         // Log deprecation warning with equivalent new format
         String newFormat = convertLegacyToNewFormat(alias);
         ROOT_LOGGER.legacyAliasFormatDeprecated(alias, newFormat);
 
-        return result;
+        // Create immutable instance
+        return new VaultAlias(defaultEngineType, defaultMountPath, secretPath, keyPath);
     }
 
     /**
@@ -164,9 +171,11 @@ class VaultAlias {
             throw ROOT_LOGGER.aliasCannotBeNullOrEmpty();
         }
 
-        VaultAlias result = new VaultAlias();
-        result.engineType = defaultEngineType;
-        result.mountPath = defaultMountPath;
+        // Use local variables to collect parsed values
+        String engineType = defaultEngineType;
+        String mountPath = defaultMountPath;
+        String secretPath;
+        String keyPath;
 
         String remaining = alias;
 
@@ -176,8 +185,8 @@ class VaultAlias {
             if (nextDelim == -1) {
                 throw ROOT_LOGGER.invalidEngineSpecificationMissingDelimiter(alias);
             }
-            result.engineType = remaining.substring(7, nextDelim);
-            if (result.engineType.isEmpty()) {
+            engineType = remaining.substring(7, nextDelim);
+            if (engineType.isEmpty()) {
                 throw ROOT_LOGGER.engineTypeCannotBeEmpty(alias);
             }
             remaining = remaining.substring(nextDelim);
@@ -189,8 +198,8 @@ class VaultAlias {
             if (hashPos == -1) {
                 throw ROOT_LOGGER.missingHashDelimiterAfterMountPath(alias);
             }
-            result.mountPath = remaining.substring(1, hashPos);
-            if (result.mountPath.isEmpty()) {
+            mountPath = remaining.substring(1, hashPos);
+            if (mountPath.isEmpty()) {
                 throw ROOT_LOGGER.mountPathCannotBeEmpty(alias);
             }
             remaining = remaining.substring(hashPos);
@@ -208,33 +217,42 @@ class VaultAlias {
             throw ROOT_LOGGER.missingQuestionDelimiterBeforeKeyPath(alias);
         }
 
-        result.secretPath = remaining.substring(0, questionPos);
-        result.keyPath = remaining.substring(questionPos + 1);
+        secretPath = remaining.substring(0, questionPos);
+        keyPath = remaining.substring(questionPos + 1);
 
         // 5. Validate
-        if (result.secretPath.isEmpty()) {
+        if (secretPath.isEmpty()) {
             throw ROOT_LOGGER.secretPathCannotBeEmpty(alias);
         }
-        if (result.keyPath.isEmpty()) {
+        if (keyPath.isEmpty()) {
             throw ROOT_LOGGER.keyPathCannotBeEmpty(alias);
         }
 
         // 6. URL-decode each segment separately
         // CRITICAL: Decode AFTER splitting to avoid double-encoding issues
-        result.engineType = urlDecode(result.engineType);
-        result.mountPath = urlDecode(result.mountPath);
-        result.secretPath = urlDecode(result.secretPath);
-        result.keyPath = urlDecode(result.keyPath);
+        engineType = urlDecode(engineType);
+        mountPath = urlDecode(mountPath);
+        secretPath = urlDecode(secretPath);
+        keyPath = urlDecode(keyPath);
 
-        // 7. Validate engine type after URL decoding (in case someone URL-encodes the engine type)
-        if (!result.engineType.equals("KVv1") && !result.engineType.equals("KVv2")) {
-            throw ROOT_LOGGER.invalidEngineType(result.engineType);
+        // 7. Validate key path doesn't contain empty segments (if using nested path syntax)
+        if (keyPath.contains("/")) {
+            // Check for empty segments: leading /, trailing /, or //
+            if (keyPath.startsWith("/") || keyPath.endsWith("/") || keyPath.contains("//")) {
+                throw ROOT_LOGGER.keyPathContainsEmptySegment(keyPath);
+            }
+        }
+
+        // 8. Validate engine type after URL decoding (in case someone URL-encodes the engine type)
+        if (!engineType.equals("KVv1") && !engineType.equals("KVv2")) {
+            throw ROOT_LOGGER.invalidEngineType(engineType);
         }
 
         // Note: The decoded values will be passed to Vault client library,
         // which will handle URL encoding for the actual API calls
 
-        return result;
+        // Create immutable instance with all validated values
+        return new VaultAlias(engineType, mountPath, secretPath, keyPath);
     }
 
     /**
