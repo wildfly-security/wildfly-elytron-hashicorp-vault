@@ -262,4 +262,16 @@ public interface HashiCorpVaultLogger extends BasicLogger {
 
     @Message(id = 71, value = "Key path contains empty segment: %s")
     IllegalArgumentException keyPathContainsEmptySegment(String keyPath);
+
+    // --- Legacy format support ---
+
+    @LogMessage(level = Logger.Level.WARN)
+    @Message(id = 72, value = "Legacy alias format detected: '%s'. This format is deprecated and will be removed in a future release. Please migrate to the new format: '%s'")
+    void legacyAliasFormatDeprecated(String legacyAlias, String newFormatEquivalent);
+
+    @Message(id = 73, value = "Legacy alias format '%s' is not supported. Use new format: '%s'")
+    IllegalArgumentException legacyAliasFormatNotSupported(String legacyAlias, String newFormatEquivalent);
+
+    @Message(id = 74, value = "Invalid alias format: %s. Expected format: [engine=TYPE][@mount-path][#]secret-path?key-path (# is optional when no engine= or @ prefix)")
+    IllegalArgumentException invalidAliasFormat(String alias);
 }

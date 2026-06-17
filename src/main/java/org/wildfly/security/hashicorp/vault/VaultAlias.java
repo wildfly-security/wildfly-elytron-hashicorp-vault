@@ -55,6 +55,101 @@ class VaultAlias {
     }
 
     /**
+     * Parse a vault alias string with legacy format support.
+     * <p>
+     * This method first checks if the alias uses the new format (contains {@code ?}, {@code #}, {@code @},
+     * or starts with {@code engine=}). If so, it delegates to {@link #parse(String, String, String)}.
+     * <p>
+     * If the alias appears to be in legacy format (no new format indicators), behavior depends on the
+     * {@code supportLegacyFormat} parameter:
+     * <ul>
+     *   <li>If {@code true}: Parse as legacy format (split on last dot) and log deprecation warning</li>
+     *   <li>If {@code false}: Throw exception with migration guidance</li>
+     * </ul>
+     * <p>
+     * Legacy format: {@code secret-path.key} where the last dot separates secret path from key.
+     *
+     * @param alias the alias string to parse
+     * @param defaultEngineType the default engine type to use if not specified in alias
+     * @param defaultMountPath the default mount path to use if not specified in alias
+     * @param supportLegacyFormat whether to support legacy format
+     * @return the parsed VaultAlias
+     * @throws IllegalArgumentException if the alias format is invalid or legacy format is not supported
+     */
+    public static VaultAlias parseWithLegacySupport(String alias, String defaultEngineType,
+                                                     String defaultMountPath, boolean supportLegacyFormat) {
+        if (alias == null || alias.isEmpty()) {
+            throw ROOT_LOGGER.aliasCannotBeNullOrEmpty();
+        }
+
+        // Check if it's new format (contains ?, #, @, or starts with engine=)
+        if (alias.contains("?") || alias.contains("#") ||
+            alias.contains("@") || alias.startsWith("engine=")) {
+            // New format - use standard parsing
+            return parse(alias, defaultEngineType, defaultMountPath);
+        }
+
+        // No new format indicators found - check if it's valid legacy format
+        int lastDot = alias.lastIndexOf('.');
+        if (lastDot == -1) {
+            // No dot found - not valid legacy format either
+            // This is an invalid alias format
+            throw ROOT_LOGGER.invalidAliasFormat(alias);
+        }
+
+        // Valid legacy format detected (has a dot)
+        if (!supportLegacyFormat) {
+            // Legacy format not supported - throw error with migration guidance
+            String newFormat = convertLegacyToNewFormat(alias);
+            throw ROOT_LOGGER.legacyAliasFormatNotSupported(alias, newFormat);
+        }
+
+        // Parse as legacy format and log deprecation warning
+
+        VaultAlias result = new VaultAlias();
+        result.engineType = defaultEngineType;
+        result.mountPath = defaultMountPath;
+        result.secretPath = alias.substring(0, lastDot);
+        result.keyPath = alias.substring(lastDot + 1);
+
+        // Validate
+        if (result.secretPath.isEmpty()) {
+            throw ROOT_LOGGER.secretPathCannotBeEmpty(alias);
+        }
+        if (result.keyPath.isEmpty()) {
+            throw ROOT_LOGGER.keyPathCannotBeEmpty(alias);
+        }
+
+        // URL-decode segments (legacy format may also have URL encoding)
+        result.secretPath = urlDecode(result.secretPath);
+        result.keyPath = urlDecode(result.keyPath);
+
+        // Log deprecation warning with equivalent new format
+        String newFormat = convertLegacyToNewFormat(alias);
+        ROOT_LOGGER.legacyAliasFormatDeprecated(alias, newFormat);
+
+        return result;
+    }
+
+    /**
+     * Convert a legacy format alias to the equivalent new format.
+     * <p>
+     * Legacy format: {@code secret-path.key} (split on last dot)
+     * New format: {@code secret-path?key} (# is optional when no engine= or @ prefix)
+     * <p>
+     * Note: This method assumes the alias has already been validated to contain a dot.
+     *
+     * @param legacyAlias the legacy format alias (must contain a dot)
+     * @return the equivalent new format alias
+     */
+    private static String convertLegacyToNewFormat(String legacyAlias) {
+        int lastDot = legacyAlias.lastIndexOf('.');
+        String secretPath = legacyAlias.substring(0, lastDot);
+        String keyPath = legacyAlias.substring(lastDot + 1);
+        return secretPath + "?" + keyPath;
+    }
+
+    /**
      * Parse a vault alias string with specified defaults for engine type and mount path.
      *
      * @param alias the alias string to parse

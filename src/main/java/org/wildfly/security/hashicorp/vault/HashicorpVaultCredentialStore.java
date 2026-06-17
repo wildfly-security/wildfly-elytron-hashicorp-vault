@@ -63,6 +63,15 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     /** In-memory LRU cache of retrieved credentials, keyed by credential alias (e.g. "path.key"). */
     private Map<String, Credential> credentialCache;
 
+    /** Whether to support legacy alias format (secret-path.key). Defaults to false. */
+    private boolean supportLegacyAliasFormat = false;
+
+    /** Default engine type to use when not specified in alias. */
+    private String defaultEngineType = "KVv2";
+
+    /** Default mount path to use when not specified in alias. */
+    private String defaultMountPath = "secret";
+
 
     @Override
     public void initialize(Map<String, String> attributes, CredentialStore.ProtectionParameter protectionParameter, Provider[] providers) throws CredentialStoreException {
@@ -95,6 +104,19 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         this.namespace = attributes.get("namespace");
         this.protectionParameter = protectionParameter;
         this.providers = providers;
+
+        // Parse new configuration parameters
+        if (attributes.get("support-legacy-alias-format") != null) {
+            this.supportLegacyAliasFormat = Boolean.parseBoolean(attributes.get("support-legacy-alias-format"));
+        }
+
+        if (attributes.get("default-engine-type") != null) {
+            this.defaultEngineType = attributes.get("default-engine-type");
+        }
+
+        if (attributes.get("default-mount-path") != null) {
+            this.defaultMountPath = attributes.get("default-mount-path");
+        }
 
         this.credentialCache = Collections.synchronizedMap(new LinkedHashMap<String, Credential>(16, 0.75f, true) {
             @Override
