@@ -143,43 +143,43 @@ public interface HashiCorpVaultLogger extends BasicLogger {
     @Message(id = 33, value = "Vault removed key %s from path %s successfully")
     void vaultRemovedKeyFromPath(String key, String path);
 
-    // --- Vault connector: VaultException message text (driver has no String+Throwable constructor) ---
+    // --- Vault connector: Exception methods (return proper exception types, not third-party VaultException) ---
 
     @Message(id = 34, value = "All login strategies failed")
-    String vaultAllLoginStrategiesFailed();
+    CredentialStoreException vaultAllLoginStrategiesFailed();
 
-    @Message(id = 35, value = "Path cannot be null or empty")
-    String vaultPathCannotBeNullOrEmpty();
+    @Message(id = 35, value = "Alias cannot be null")
+    IllegalArgumentException vaultAliasCannotBeNull();
 
     @Message(id = 36, value = "Key cannot be null or empty")
-    String vaultKeyCannotBeNullOrEmpty();
+    IllegalArgumentException vaultKeyCannotBeNullOrEmpty();
 
     @Message(id = 37, value = "Value cannot be null")
-    String vaultValueCannotBeNull();
+    IllegalArgumentException vaultValueCannotBeNull();
 
     @Message(id = 38, value = "Forbidden to retrieve secret at path: %s")
-    String vaultForbiddenToRetrieveSecretAtPath(String path);
+    CredentialStoreException vaultForbiddenToRetrieveSecretAtPath(String path);
 
     @Message(id = 39, value = "Failed to retrieve secret from path: %s/%s (HTTP %d)")
-    String vaultFailedToRetrieveSecretHttp(String path, String key, int responseStatus);
+    CredentialStoreException vaultFailedToRetrieveSecretHttp(String path, String key, int responseStatus);
 
     @Message(id = 40, value = "Forbidden to store secret at path: %s")
-    String vaultForbiddenToStoreSecretAtPath(String path);
+    CredentialStoreException vaultForbiddenToStoreSecretAtPath(String path);
 
     @Message(id = 41, value = "Failed to store secret at path: %s/%s (HTTP %d)")
-    String vaultFailedToStoreSecretHttp(String path, String key, int responseStatus);
+    CredentialStoreException vaultFailedToStoreSecretHttp(String path, String key, int responseStatus);
 
     @Message(id = 42, value = "Forbidden to delete secret at path: %s")
-    String vaultForbiddenToDeleteSecretAtPath(String path);
+    CredentialStoreException vaultForbiddenToDeleteSecretAtPath(String path);
 
     @Message(id = 43, value = "Failed to delete secret at path: %s (HTTP %d)")
-    String vaultFailedToDeleteSecretHttp(String path, int deleteStatus);
+    CredentialStoreException vaultFailedToDeleteSecretHttp(String path, int deleteStatus);
 
     @Message(id = 44, value = "Forbidden to update secret at path: %s")
-    String vaultForbiddenToUpdateSecretAtPath(String path);
+    CredentialStoreException vaultForbiddenToUpdateSecretAtPath(String path);
 
     @Message(id = 45, value = "Failed to update secret at path: %s after removing key %s (HTTP %d)")
-    String vaultFailedToUpdateSecretAfterRemoveKey(String path, String key, int writeStatus);
+    CredentialStoreException vaultFailedToUpdateSecretAfterRemoveKey(String path, String key, int writeStatus);
 
     @Message(id = 46, value = "Path does not exist or forbidden: \"%s\"")
     String vaultPathDoesNotExistOrForbidden(String path);
@@ -231,37 +231,37 @@ public interface HashiCorpVaultLogger extends BasicLogger {
     // --- Alias parsing errors ---
 
     @Message(id = 61, value = "Alias cannot be null or empty")
-    IllegalArgumentException aliasCannotBeNullOrEmpty();
+    CredentialStoreException aliasCannotBeNullOrEmpty();
 
     @Message(id = 62, value = "Invalid engine specification: missing delimiter after 'engine=' in alias: %s")
-    IllegalArgumentException invalidEngineSpecificationMissingDelimiter(String alias);
+    CredentialStoreException invalidEngineSpecificationMissingDelimiter(String alias);
 
     @Message(id = 63, value = "Engine type cannot be empty in alias: %s")
-    IllegalArgumentException engineTypeCannotBeEmpty(String alias);
+    CredentialStoreException engineTypeCannotBeEmpty(String alias);
 
     @Message(id = 64, value = "Missing '#' delimiter after mount path in alias: %s")
-    IllegalArgumentException missingHashDelimiterAfterMountPath(String alias);
+    CredentialStoreException missingHashDelimiterAfterMountPath(String alias);
 
     @Message(id = 65, value = "Mount path cannot be empty after '@' in alias: %s")
-    IllegalArgumentException mountPathCannotBeEmpty(String alias);
+    CredentialStoreException mountPathCannotBeEmpty(String alias);
 
     @Message(id = 66, value = "Secret path must start with '#' in alias: %s")
-    IllegalArgumentException secretPathMustStartWithHash(String alias);
+    CredentialStoreException secretPathMustStartWithHash(String alias);
 
     @Message(id = 67, value = "Missing '?' delimiter before key path in alias: %s")
-    IllegalArgumentException missingQuestionDelimiterBeforeKeyPath(String alias);
+    CredentialStoreException missingQuestionDelimiterBeforeKeyPath(String alias);
 
     @Message(id = 68, value = "Secret path cannot be empty in alias: %s")
-    IllegalArgumentException secretPathCannotBeEmpty(String alias);
+    CredentialStoreException secretPathCannotBeEmpty(String alias);
 
     @Message(id = 69, value = "Key path cannot be empty in alias: %s")
-    IllegalArgumentException keyPathCannotBeEmpty(String alias);
+    CredentialStoreException keyPathCannotBeEmpty(String alias);
 
     @Message(id = 70, value = "Key path cannot be null or empty")
-    IllegalArgumentException keyPathCannotBeNullOrEmpty();
+    CredentialStoreException keyPathCannotBeNullOrEmpty();
 
     @Message(id = 71, value = "Key path contains empty segment: %s")
-    IllegalArgumentException keyPathContainsEmptySegment(String keyPath);
+    CredentialStoreException keyPathContainsEmptySegment(String keyPath);
 
     // --- Legacy format support ---
 
@@ -270,13 +270,13 @@ public interface HashiCorpVaultLogger extends BasicLogger {
     void legacyAliasFormatDeprecated(String legacyAlias, String newFormatEquivalent);
 
     @Message(id = 73, value = "Legacy alias format '%s' is not supported. Use new format: '%s'")
-    IllegalArgumentException legacyAliasFormatNotSupported(String legacyAlias, String newFormatEquivalent);
+    CredentialStoreException legacyAliasFormatNotSupported(String legacyAlias, String newFormatEquivalent);
 
     @Message(id = 74, value = "Invalid alias format: %s. Expected format: [engine=TYPE][@mount-path][#]secret-path?key-path (# is optional when no engine= or @ prefix)")
-    IllegalArgumentException invalidAliasFormat(String alias);
+    CredentialStoreException invalidAliasFormat(String alias);
 
     @Message(id = 75, value = "Invalid engine type '%s'. Valid values are: KVv1, KVv2")
-    IllegalArgumentException invalidEngineType(String engineType);
+    CredentialStoreException invalidEngineType(String engineType);
 
     @Message(id = 76, value = "Invalid default-engine-type configuration '%s'. Valid values are: KVv1, KVv2")
     CredentialStoreException invalidDefaultEngineType(String engineType);

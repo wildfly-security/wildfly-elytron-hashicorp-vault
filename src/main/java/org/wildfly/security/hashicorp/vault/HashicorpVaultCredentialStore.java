@@ -23,7 +23,6 @@ import javax.net.ssl.SSLContext;
 
 import org.wildfly.security.credential.Credential;
 import org.wildfly.security.credential.PasswordCredential;
-import org.wildfly.security.credential.source.CredentialSource;
 import org.wildfly.security.credential.store.CredentialStore;
 import org.wildfly.security.credential.store.CredentialStoreException;
 import org.wildfly.security.credential.store.CredentialStoreExtension;
@@ -32,7 +31,6 @@ import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
 import org.wildfly.security.password.interfaces.ClearPassword;
 
 import io.github.jopenlibs.vault.SslConfig;
-import io.github.jopenlibs.vault.VaultException;
 
 /**
  * Credential store backed by Hashicorp Vault
@@ -180,8 +178,6 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             initialized = true;
         } catch (IOException e) {
             throw ROOT_LOGGER.failedToInitializeVaultCredentialStore(e);
-        } catch (VaultException e) {
-            throw ROOT_LOGGER.failedToConfigureVaultConnection(e);
         }
     }
 
@@ -210,21 +206,15 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             throw ROOT_LOGGER.credentialCannotBeNull();
         }
 
-        // Parse credentialAlias in format "path.key"
-        String[] aliasSplit = credentialAlias.split("\\.");
-        if (aliasSplit.length != 2) {
-            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
-        }
+        VaultAlias alias = parseAlias(credentialAlias);
 
         try {
             final char[] chars = credential.castAndApply(PasswordCredential.class, c -> c.getPassword().castAndApply(ClearPassword.class, ClearPassword::getPassword));
             if (chars == null) {
                 throw ROOT_LOGGER.failedToExtractPasswordFromCredential();
             }
-            vaultConnector.putSecret(aliasSplit[0], aliasSplit[1], new String(chars));
+            vaultConnector.putSecretData(alias, new String(chars));
             putInCredentialCache(credentialAlias, credential);
-        } catch (VaultException e) {
-            throw ROOT_LOGGER.failedToStoreCredentialInVault(e);
         } catch (ClassCastException e) {
             throw ROOT_LOGGER.onlyPasswordCredentialWithClearPasswordSupported(e);
         }
@@ -239,12 +229,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             throw ROOT_LOGGER.credentialAliasRequired();
         }
 
-        // Parse credentialAlias in format "path.key"
-        String[] aliasSplit = credentialAlias.split("\\.");
-        if (aliasSplit.length != 2) {
-            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
-        }
-
+        // Check cache first
         Credential cached;
         synchronized (credentialCache) {
             cached = credentialCache.get(credentialAlias);
@@ -253,16 +238,25 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             return credentialType.cast(cached);
         }
 
+        VaultAlias alias = parseAlias(credentialAlias);
+
         try {
-            CredentialSource credentialSource = new VaultCredentialSource(vaultConnector, aliasSplit[0], aliasSplit[1]);
-            PasswordCredential credential = credentialSource.getCredential(PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
-            if (credential == null) {
-                return null; // Secret not found or key not found in secret
+            // Retrieve full secret data from Vault
+            Map<String, Object> secretData = vaultConnector.getSecretData(alias);
+            if (secretData == null) {
+                return null; // Secret not found
             }
+
+            // Resolve the specific value using key path
+            String value = KeyPathResolver.resolveKeyPath(secretData, alias.getKeyPath());
+            if (value == null) {
+                return null; // Key not found in secret
+            }
+
+            // Create credential from the value
+            PasswordCredential credential = new PasswordCredential(ClearPassword.createRaw(ClearPassword.ALGORITHM_CLEAR, value.toCharArray()));
             putInCredentialCache(credentialAlias, credential);
             return credentialType.cast(credential);
-        } catch (IOException e) {
-            throw ROOT_LOGGER.failedToRetrieveCredentialFromVault(e);
         } catch (ClassCastException e) {
             throw ROOT_LOGGER.unsupportedCredentialType(credentialType.getSimpleName(), e);
         }
@@ -277,21 +271,31 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             throw ROOT_LOGGER.credentialAliasRequired();
         }
 
-        // Parse credentialAlias in format "path.key"
-        String[] aliasSplit = credentialAlias.split("\\.");
-        if (aliasSplit.length != 2) {
-            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
-        }
+        VaultAlias alias = parseAlias(credentialAlias);
 
-        try {
-            vaultConnector.removeSecret(aliasSplit[0], aliasSplit[1]);
-            synchronized (credentialCache) {
-                // we need to remove whole path because that is how the vault's removeSecret operation works
-                credentialCache.keySet().removeIf(k -> k.equals(credentialAlias) || k.startsWith(aliasSplit[0] + "."));
-            }
-        } catch (VaultException e) {
-            throw ROOT_LOGGER.failedToRemoveCredentialFromVault(e);
+        vaultConnector.removeSecretData(alias);
+        synchronized (credentialCache) {
+            // Remove from cache - just this specific alias
+            // Note: If the removal empties the secret, other keys at same path are also removed from Vault
+            credentialCache.remove(credentialAlias);
         }
+    }
+
+    /**
+     * Parse a credential alias string into a VaultAlias object.
+     * Supports both new alias format and legacy format (if enabled).
+     *
+     * @param credentialAlias the alias string to parse
+     * @return parsed VaultAlias object
+     * @throws CredentialStoreException if parsing fails
+     */
+    private VaultAlias parseAlias(String credentialAlias) throws CredentialStoreException {
+        return VaultAlias.parseWithLegacySupport(
+            credentialAlias,
+            this.defaultEngineType,
+            this.defaultMountPath,
+            this.supportLegacyAliasFormat
+        );
     }
 
     private void putInCredentialCache(String alias, Credential credential) {
@@ -461,8 +465,23 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         return aliases;
     }
 
+    // TODO: Implement alias listing with new alias format
     // Keep an eye on https://github.com/hashicorp/vault/issues/5275 and remove this logic once hashicorp vault provides this operation
+    // This method needs to be redesigned to work with the new alias format that supports:
+    // - Custom mount paths (not just "secret")
+    // - Nested JSON key paths (not just top-level keys)
+    // - Different engine types (KVv1 vs KVv2)
+    // The current implementation assumes legacy "path.key" format and needs VaultConnector methods that were removed.
     private void collectAliasesRecursive(String path, Set<String> aliases, boolean recursive, int maxDepth, int currentDepth, int maxNumberOfAliases) throws CredentialStoreException {
+        throw new UnsupportedOperationException(
+            "Alias listing is not yet implemented for the new alias format. " +
+            "This feature requires redesign to support custom mount paths, nested JSON keys, and different engine types. " +
+            "For now, you must know your alias names explicitly. " +
+            "See https://github.com/wildfly-security/wildfly-elytron-hashicorp-vault/issues/70 for tracking."
+        );
+
+        // Original implementation (commented out - requires removed VaultConnector methods):
+        /*
         if (aliases.size() >= maxNumberOfAliases) {
             return;
         }
@@ -518,6 +537,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                 }
             }
         }
+        */
     }
 
     private String normalizePath(String path) {

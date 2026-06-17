@@ -8,6 +8,8 @@ import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger
 
 import java.util.Map;
 
+import org.wildfly.security.credential.store.CredentialStoreException;
+
 /**
  * Resolves key paths within Vault secret data.
  *
@@ -59,9 +61,9 @@ class KeyPathResolver {
      * @param data the secret data map from Vault
      * @param keyPath the key path from alias (after ? delimiter, already URL-decoded)
      * @return the extracted value as a string, or {@code null} if not found
-     * @throws IllegalArgumentException if keyPath is null or empty
+     * @throws CredentialStoreException if keyPath is null or empty
      */
-    public static String resolveKeyPath(Map<String, Object> data, String keyPath) {
+    public static String resolveKeyPath(Map<String, Object> data, String keyPath) throws CredentialStoreException {
         if (keyPath == null || keyPath.isEmpty()) {
             throw ROOT_LOGGER.keyPathCannotBeNullOrEmpty();
         }
@@ -111,5 +113,121 @@ class KeyPathResolver {
         }
 
         return null;
+    }
+
+    /**
+     * Set a value in Vault secret data using key path.
+     * Creates nested maps as needed for nested paths.
+     *
+     * @param data the secret data map to modify
+     * @param keyPath the key path (after ? delimiter, already URL-decoded)
+     * @param value the value to set
+     * @throws CredentialStoreException if keyPath is null or empty
+     */
+    @SuppressWarnings("unchecked")
+    public static void setNestedValue(Map<String, Object> data, String keyPath, String value) throws CredentialStoreException {
+        if (keyPath == null || keyPath.isEmpty()) {
+            throw ROOT_LOGGER.keyPathCannotBeNullOrEmpty();
+        }
+        if (data == null) {
+            throw new IllegalArgumentException("Data map cannot be null");
+        }
+
+        // Check if key path contains / (nested path)
+        if (!keyPath.contains("/")) {
+            // Simple key - direct set
+            data.put(keyPath, value);
+            return;
+        }
+
+        // Nested path - traverse and create maps as needed
+        String[] segments = keyPath.split("/");
+        Map<String, Object> current = data;
+
+        for (int i = 0; i < segments.length; i++) {
+            String segment = segments[i];
+
+            // Validate segment is not empty
+            if (segment.isEmpty()) {
+                throw ROOT_LOGGER.keyPathContainsEmptySegment(keyPath);
+            }
+
+            // If this is the last segment, set the value
+            if (i == segments.length - 1) {
+                current.put(segment, value);
+                return;
+            }
+
+            // Not the last segment - need to traverse or create nested map
+            Object next = current.get(segment);
+            if (next == null) {
+                // Create new nested map
+                Map<String, Object> newMap = new java.util.HashMap<>();
+                current.put(segment, newMap);
+                current = newMap;
+            } else if (next instanceof Map) {
+                // Traverse into existing map
+                current = (Map<String, Object>) next;
+            } else {
+                // Existing value is not a map - replace it with a map
+                Map<String, Object> newMap = new java.util.HashMap<>();
+                current.put(segment, newMap);
+                current = newMap;
+            }
+        }
+    }
+
+    /**
+     * Remove a value from Vault secret data using key path.
+     * For nested paths, removes the leaf value but preserves parent maps.
+     *
+     * @param data the secret data map to modify
+     * @param keyPath the key path (after ? delimiter, already URL-decoded)
+     * @return true if a value was removed, false if the key path didn't exist
+     * @throws CredentialStoreException if keyPath is null or empty
+     */
+    @SuppressWarnings("unchecked")
+    public static boolean removeNestedValue(Map<String, Object> data, String keyPath) throws CredentialStoreException {
+        if (keyPath == null || keyPath.isEmpty()) {
+            throw ROOT_LOGGER.keyPathCannotBeNullOrEmpty();
+        }
+        if (data == null) {
+            return false;
+        }
+
+        // Check if key path contains / (nested path)
+        if (!keyPath.contains("/")) {
+            // Simple key - direct removal
+            return data.remove(keyPath) != null;
+        }
+
+        // Nested path - traverse to parent and remove leaf
+        String[] segments = keyPath.split("/");
+        Map<String, Object> current = data;
+
+        for (int i = 0; i < segments.length; i++) {
+            String segment = segments[i];
+
+            // Validate segment is not empty
+            if (segment.isEmpty()) {
+                throw ROOT_LOGGER.keyPathContainsEmptySegment(keyPath);
+            }
+
+            // If this is the last segment, remove it
+            if (i == segments.length - 1) {
+                return current.remove(segment) != null;
+            }
+
+            // Not the last segment - need to traverse
+            Object next = current.get(segment);
+            if (next == null || !(next instanceof Map)) {
+                // Path doesn't exist or can't traverse further
+                return false;
+            }
+
+            current = (Map<String, Object>) next;
+        }
+
+        return false;
     }
 }

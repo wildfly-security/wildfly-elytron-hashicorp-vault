@@ -9,6 +9,8 @@ import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 
+import org.wildfly.security.credential.store.CredentialStoreException;
+
 /**
  * Represents a parsed Vault alias in the new format.
  *
@@ -48,9 +50,9 @@ class VaultAlias {
      *
      * @param alias the alias string to parse
      * @return the parsed VaultAlias
-     * @throws IllegalArgumentException if the alias format is invalid
+     * @throws CredentialStoreException if the alias format is invalid
      */
-    public static VaultAlias parse(String alias) {
+    public static VaultAlias parse(String alias) throws CredentialStoreException {
         return parse(alias, "KVv2", "secret");
     }
 
@@ -74,10 +76,10 @@ class VaultAlias {
      * @param defaultMountPath the default mount path to use if not specified in alias
      * @param supportLegacyFormat whether to support legacy format
      * @return the parsed VaultAlias
-     * @throws IllegalArgumentException if the alias format is invalid or legacy format is not supported
+     * @throws CredentialStoreException if the alias format is invalid or legacy format is not supported
      */
     public static VaultAlias parseWithLegacySupport(String alias, String defaultEngineType,
-                                                     String defaultMountPath, boolean supportLegacyFormat) {
+                                                     String defaultMountPath, boolean supportLegacyFormat) throws CredentialStoreException {
         if (alias == null || alias.isEmpty()) {
             throw ROOT_LOGGER.aliasCannotBeNullOrEmpty();
         }
@@ -105,7 +107,6 @@ class VaultAlias {
         }
 
         // Parse as legacy format and log deprecation warning
-
         VaultAlias result = new VaultAlias();
         result.engineType = defaultEngineType;
         result.mountPath = defaultMountPath;
@@ -156,9 +157,9 @@ class VaultAlias {
      * @param defaultEngineType the default engine type to use if not specified in alias
      * @param defaultMountPath the default mount path to use if not specified in alias
      * @return the parsed VaultAlias
-     * @throws IllegalArgumentException if the alias format is invalid
+     * @throws CredentialStoreException if the alias format is invalid
      */
-    public static VaultAlias parse(String alias, String defaultEngineType, String defaultMountPath) {
+    public static VaultAlias parse(String alias, String defaultEngineType, String defaultMountPath) throws CredentialStoreException {
         if (alias == null || alias.isEmpty()) {
             throw ROOT_LOGGER.aliasCannotBeNullOrEmpty();
         }
