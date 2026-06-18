@@ -16,7 +16,6 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -91,16 +90,6 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
 
     private HashicorpVaultCredentialStore createCredentialStore(VaultContainer<?> container, KvVersion version, String mountPath) throws Exception {
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
-
-        // Note: kvV1FallbackPredicate is a temporary mechanism that will be removed.
-        // For pure KV v1 environments, set the predicate to identify the v1 mount.
-        // For mixed environments, tests should use explicit engine= in alias strings instead.
-        if (version == KvVersion.V1 && !(container instanceof VaultContainerKvMixed)) {
-            // Pure KV v1 environment only
-            Predicate<String> kvV1Predicate = path ->
-                path.equals(mountPath) || path.startsWith(mountPath + "/");
-            store.setKvV1FallbackPredicate(kvV1Predicate);
-        }
 
         Map<String, String> attributes = new HashMap<>();
         attributes.put("host-address", container.getHttpHostAddress());

@@ -15,7 +15,6 @@ import java.security.Provider;
 import java.security.spec.InvalidKeySpecException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
@@ -211,17 +210,6 @@ public class AliasFormatIntegrationTestCase {
             VaultContainer<?> container, KvVersion version, String mountPath, boolean supportLegacy) throws Exception {
 
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
-
-        // Set KV v1 fallback predicate for v1 configurations
-        if (version == KvVersion.V1) {
-            Predicate<String> kvV1Predicate = path ->
-                path.equals(mountPath) || path.startsWith(mountPath + "/") ||
-                path.equals("custom") || path.startsWith("custom/") ||
-                path.equals("custom-v1") || path.startsWith("custom-v1/") ||
-                path.equals("team/backend") || path.startsWith("team/backend/") ||
-                path.equals("team.alpha/backend") || path.startsWith("team.alpha/backend/");
-            store.setKvV1FallbackPredicate(kvV1Predicate);
-        }
 
         Map<String, String> attributes = new HashMap<>();
         attributes.put("host-address", container.getHttpHostAddress());

@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Predicate;
 
 import javax.net.ssl.SSLContext;
 
@@ -32,8 +31,6 @@ import io.github.jopenlibs.vault.response.LogicalResponse;
  * Vault Connector
  */
 public class VaultConnector {
-
-    private static final Predicate<String> DEFAULT_KV_V1_FALLBACK_PREDICATE = path -> false;
 
     private final String vaultUrl;
     private final String token;
@@ -59,14 +56,10 @@ public class VaultConnector {
     private final Map<String, Vault> vaultInstanceCache = new HashMap<>();
 
     public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify) {
-        this(vaultUrl, token, namespace, sslConfig, sslVerify, null, DEFAULT_KV_V1_FALLBACK_PREDICATE);
+        this(vaultUrl, token, namespace, sslConfig, sslVerify, null);
     }
 
     public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify, SSLContext sslContext) {
-        this(vaultUrl, token, namespace, sslConfig, sslVerify, sslContext, DEFAULT_KV_V1_FALLBACK_PREDICATE);
-    }
-
-    public VaultConnector(String vaultUrl, String token, String namespace, SslConfig sslConfig, boolean sslVerify, SSLContext sslContext, Predicate<String> kvV1FallbackPredicate) {
         this.vaultUrl = vaultUrl;
         this.token = token;
         this.namespace = namespace;
@@ -80,14 +73,10 @@ public class VaultConnector {
     }
 
     public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig) {
-        this(vaultUrl, jwtConfig, namespace, sslConfig, null, DEFAULT_KV_V1_FALLBACK_PREDICATE);
+        this(vaultUrl, jwtConfig, namespace, sslConfig, null);
     }
 
     public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig, SSLContext sslContext) {
-        this(vaultUrl, jwtConfig, namespace, sslConfig, sslContext, DEFAULT_KV_V1_FALLBACK_PREDICATE);
-    }
-
-    public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig, SSLContext sslContext, Predicate<String> kvV1FallbackPredicate) {
         this.vaultUrl = vaultUrl;
         this.token = null;
         this.namespace = namespace;

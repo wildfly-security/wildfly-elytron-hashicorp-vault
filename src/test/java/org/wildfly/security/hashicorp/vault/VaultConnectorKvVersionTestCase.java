@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -94,19 +93,12 @@ public class VaultConnectorKvVersionTestCase {
     }
 
     private VaultConnector createConnector(VaultContainer<?> container, String token, KvVersion version, String mountPath) throws VaultException {
-        // Create predicate that returns true for KV v1 mounts
-        Predicate<String> kvV1Predicate = version == KvVersion.V1
-            ? path -> path.equals(mountPath) || path.startsWith(mountPath + "/")
-            : path -> false;
-
         VaultConnector connector = new VaultConnector(
             container.getHttpHostAddress(),
             token,
             "admin",
             new SslConfig().verify(true).build(),
-            true,
-            null,
-            kvV1Predicate
+            true
         );
         connector.configure();
         return connector;

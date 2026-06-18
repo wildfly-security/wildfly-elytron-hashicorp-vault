@@ -5,7 +5,6 @@
 package org.wildfly.security.hashicorp.vault;
 
 import java.util.Set;
-import java.util.function.Predicate;
 
 import javax.net.ssl.SSLContext;
 
@@ -19,15 +18,6 @@ import org.wildfly.security.credential.store.CredentialStoreExtension;
 public interface HashicorpVaultCredentialStoreExtension extends CredentialStoreExtension {
 
     void setSslContext(SSLContext sslContext);
-
-    /**
-     * Set a predicate to determine if KV v1 should be used for a given secret engine path.
-     * This allows fallback to KV v1 for specific paths while maintaining KV v2 as the default.
-     *
-     * @param kvV1FallbackPredicate predicate that returns true if the given root path should use KV v1.
-     *                              If null, a default predicate that always returns false will be used (KV v2 for all paths).
-     */
-    void setKvV1FallbackPredicate(Predicate<String> kvV1FallbackPredicate);
 
     /**
      * Get aliases from a specific path in Vault.

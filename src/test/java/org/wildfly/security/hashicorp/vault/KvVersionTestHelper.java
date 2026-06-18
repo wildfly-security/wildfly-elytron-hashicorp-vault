@@ -275,5 +275,3 @@ public class KvVersionTestHelper {
         throw new IllegalStateException("Vault container did not become ready within " + maxWaitSeconds + " seconds");
     }
 }
-
-// Made with Bob
