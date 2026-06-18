@@ -92,15 +92,23 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
     private HashicorpVaultCredentialStore createCredentialStore(VaultContainer<?> container, KvVersion version, String mountPath) throws Exception {
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
 
-        // Set the KV v1 fallback predicate before initialization
-        if (version == KvVersion.V1) {
-            Predicate<String> kvV1Predicate = path -> path.equals(mountPath) || path.startsWith(mountPath + "/");
+        // Note: kvV1FallbackPredicate is a temporary mechanism that will be removed.
+        // For pure KV v1 environments, set the predicate to identify the v1 mount.
+        // For mixed environments, tests should use explicit engine= in alias strings instead.
+        if (version == KvVersion.V1 && !(container instanceof VaultContainerKvMixed)) {
+            // Pure KV v1 environment only
+            Predicate<String> kvV1Predicate = path ->
+                path.equals(mountPath) || path.startsWith(mountPath + "/");
             store.setKvV1FallbackPredicate(kvV1Predicate);
         }
 
         Map<String, String> attributes = new HashMap<>();
         attributes.put("host-address", container.getHttpHostAddress());
         attributes.put("namespace", "admin");
+        // Set default engine type based on the KV version being tested
+        String engineType = version == KvVersion.V1 ? "KVv1" : "KVv2";
+        attributes.put("default-engine-type", engineType);
+        attributes.put("default-mount-path", mountPath);
         store.initialize(attributes,
             new CredentialStore.CredentialSourceProtectionParameter(
                 IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
@@ -133,7 +141,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
 
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
         PasswordCredential credential = store.retrieve(
-            mountPath + "/testing1.top_secret",
+            "#testing1?top_secret",
             PasswordCredential.class,
             ClearPassword.ALGORITHM_CLEAR,
             null,
@@ -153,11 +161,11 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Store a new credential
-        store.store(mountPath + "/testing1.test_secret", createCredentialFromPassword("testPassword"), null);
+        store.store("#testing1?test_secret", createCredentialFromPassword("testPassword"), null);
 
         // Retrieve and verify
         PasswordCredential credential = store.retrieve(
-            mountPath + "/testing1.test_secret",
+            "#testing1?test_secret",
             PasswordCredential.class,
             ClearPassword.ALGORITHM_CLEAR,
             null,
@@ -177,12 +185,12 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Store two credentials at the same path
-        store.store(mountPath + "/myapp.mp", createCredentialFromPassword("password1"), null);
-        store.store(mountPath + "/myapp.mp2", createCredentialFromPassword("password2"), null);
+        store.store("#myapp?mp", createCredentialFromPassword("password1"), null);
+        store.store("#myapp?mp2", createCredentialFromPassword("password2"), null);
 
         // Verify both exist
         PasswordCredential credential1 = store.retrieve(
-            mountPath + "/myapp.mp",
+            "#myapp?mp",
             PasswordCredential.class,
             ClearPassword.ALGORITHM_CLEAR,
             null,
@@ -190,7 +198,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         assertNotNull(credential1, String.format("First credential should exist in %s", version));
 
         PasswordCredential credential2 = store.retrieve(
-            mountPath + "/myapp.mp2",
+            "#myapp?mp2",
             PasswordCredential.class,
             ClearPassword.ALGORITHM_CLEAR,
             null,
@@ -207,15 +215,15 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Store two credentials
-        store.store(mountPath + "/myapp.mp", createCredentialFromPassword("password1"), null);
-        store.store(mountPath + "/myapp.mp2", createCredentialFromPassword("password2"), null);
+        store.store("#myapp?mp", createCredentialFromPassword("password1"), null);
+        store.store("#myapp?mp2", createCredentialFromPassword("password2"), null);
 
         // Remove one
-        store.remove(mountPath + "/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
+        store.remove("#myapp?mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
 
         // Verify first still exists
         PasswordCredential remaining = store.retrieve(
-            mountPath + "/myapp.mp",
+            "#myapp?mp",
             PasswordCredential.class,
             ClearPassword.ALGORITHM_CLEAR,
             null,
@@ -225,7 +233,7 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
 
         // Verify second is gone
         PasswordCredential removed = store.retrieve(
-            mountPath + "/myapp.mp2",
+            "#myapp?mp2",
             PasswordCredential.class,
             ClearPassword.ALGORITHM_CLEAR,
             null,
@@ -245,14 +253,14 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
 
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
-        Set<String> aliases = store.getAliases(mountPath + "/testing1");
+        Set<String> aliases = store.getAliases("#testing1");
         assertNotNull(aliases, String.format("Should return aliases in %s", version));
         assertFalse(aliases.isEmpty(), String.format("Should have aliases in %s", version));
-        assertTrue(aliases.contains(mountPath + "/testing1.top_secret"),
+        assertTrue(aliases.contains("#testing1?top_secret"),
             String.format("Should contain expected alias in %s", version));
 
         // Verify it doesn't contain aliases from other paths
-        assertFalse(aliases.contains(mountPath + "/testing2.dbuser"),
+        assertFalse(aliases.contains("#testing2?dbuser"),
             String.format("Should not contain aliases from other paths in %s", version));
     }
 
@@ -265,15 +273,15 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Get aliases from testing1
-        Set<String> aliases1 = store.getAliases(mountPath + "/testing1");
-        assertTrue(aliases1.contains(mountPath + "/testing1.top_secret"));
-        assertFalse(aliases1.contains(mountPath + "/testing2.dbuser"));
+        Set<String> aliases1 = store.getAliases("#testing1");
+        assertTrue(aliases1.contains("#testing1?top_secret"));
+        assertFalse(aliases1.contains("#testing2?dbuser"));
 
         // Get aliases from testing2
-        Set<String> aliases2 = store.getAliases(mountPath + "/testing2");
-        assertTrue(aliases2.contains(mountPath + "/testing2.dbuser"));
-        assertTrue(aliases2.contains(mountPath + "/testing2.jmsuser"));
-        assertFalse(aliases2.contains(mountPath + "/testing1.top_secret"));
+        Set<String> aliases2 = store.getAliases("#testing2");
+        assertTrue(aliases2.contains("#testing2?dbuser"));
+        assertTrue(aliases2.contains("#testing2?jmsuser"));
+        assertFalse(aliases2.contains("#testing1?top_secret"));
     }
 
     @ParameterizedTest(name = "[{2}] Get aliases non-recursive at {1}")
@@ -284,12 +292,12 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
 
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
-        Set<String> aliases1 = store.getAliases(mountPath + "/testing1");
-        Set<String> aliases2 = store.getAliases(mountPath + "/testing1", false, 0);
+        Set<String> aliases1 = store.getAliases("#testing1");
+        Set<String> aliases2 = store.getAliases("#testing1", false, 0);
 
         assertEquals(aliases1, aliases2,
             String.format("Non-recursive should match default behavior in %s", version));
-        assertTrue(aliases2.contains(mountPath + "/testing1.top_secret"));
+        assertTrue(aliases2.contains("#testing1?top_secret"));
     }
 
     @ParameterizedTest(name = "[{2}] Get aliases recursive depth 0 at {1}")
@@ -301,17 +309,17 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Create nested structure
-        store.store(mountPath + "/app1.key1", createCredentialFromPassword("value1"), null);
-        store.store(mountPath + "/app1.key2", createCredentialFromPassword("value2"), null);
-        store.store(mountPath + "/app1/subapp.key3", createCredentialFromPassword("value3"), null);
+        store.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        store.store("#app1?key2", createCredentialFromPassword("value2"), null);
+        store.store("#app1/subapp?key3", createCredentialFromPassword("value3"), null);
 
-        Set<String> aliases = store.getAliases(mountPath + "/app1", true, 0);
+        Set<String> aliases = store.getAliases("#app1", true, 0);
 
-        assertTrue(aliases.contains(mountPath + "/app1.key1"),
+        assertTrue(aliases.contains("#app1?key1"),
             String.format("Should contain top-level key1 in %s", version));
-        assertTrue(aliases.contains(mountPath + "/app1.key2"),
+        assertTrue(aliases.contains("#app1?key2"),
             String.format("Should contain top-level key2 in %s", version));
-        assertFalse(aliases.contains(mountPath + "/app1/subapp.key3"),
+        assertFalse(aliases.contains("#app1/subapp?key3"),
             String.format("Should not include nested keys at depth 0 in %s", version));
     }
 
@@ -324,17 +332,17 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Create nested structure
-        store.store(mountPath + "/app1.key1", createCredentialFromPassword("value1"), null);
-        store.store(mountPath + "/app1/subapp1.key2", createCredentialFromPassword("value2"), null);
-        store.store(mountPath + "/app1/subapp1/deep.key3", createCredentialFromPassword("value3"), null);
+        store.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        store.store("#app1/subapp1?key2", createCredentialFromPassword("value2"), null);
+        store.store("#app1/subapp1/deep?key3", createCredentialFromPassword("value3"), null);
 
-        Set<String> aliases = store.getAliases(mountPath + "/app1", true, 1);
+        Set<String> aliases = store.getAliases("#app1", true, 1);
 
-        assertTrue(aliases.contains(mountPath + "/app1.key1"),
+        assertTrue(aliases.contains("#app1?key1"),
             String.format("Should contain top-level key in %s", version));
-        assertTrue(aliases.contains(mountPath + "/app1/subapp1.key2"),
+        assertTrue(aliases.contains("#app1/subapp1?key2"),
             String.format("Should contain depth-1 key in %s", version));
-        assertFalse(aliases.contains(mountPath + "/app1/subapp1/deep.key3"),
+        assertFalse(aliases.contains("#app1/subapp1/deep?key3"),
             String.format("Should not include depth-2 keys in %s", version));
     }
 
@@ -347,20 +355,18 @@ public class HashicorpVaultCredentialStoreKvVersionTestCase {
         HashicorpVaultCredentialStore store = createCredentialStore(vaultContainer, version, mountPath);
 
         // Create multiple subpaths at same level
-        store.store(mountPath + "/app1.key1", createCredentialFromPassword("value1"), null);
-        store.store(mountPath + "/app1/subapp1.key2", createCredentialFromPassword("value2"), null);
-        store.store(mountPath + "/app1/subapp2.key3", createCredentialFromPassword("value3"), null);
-        store.store(mountPath + "/app1/subapp3.key4", createCredentialFromPassword("value4"), null);
+        store.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        store.store("#app1/subapp1?key2", createCredentialFromPassword("value2"), null);
+        store.store("#app1/subapp2?key3", createCredentialFromPassword("value3"), null);
+        store.store("#app1/subapp3?key4", createCredentialFromPassword("value4"), null);
 
-        Set<String> aliases = store.getAliases(mountPath + "/app1", true, 1);
+        Set<String> aliases = store.getAliases("#app1", true, 1);
 
         assertEquals(4, aliases.size(),
             String.format("Should find all 4 aliases in %s", version));
-        assertTrue(aliases.contains(mountPath + "/app1.key1"));
-        assertTrue(aliases.contains(mountPath + "/app1/subapp1.key2"));
-        assertTrue(aliases.contains(mountPath + "/app1/subapp2.key3"));
-        assertTrue(aliases.contains(mountPath + "/app1/subapp3.key4"));
+        assertTrue(aliases.contains("#app1?key1"));
+        assertTrue(aliases.contains("#app1/subapp1?key2"));
+        assertTrue(aliases.contains("#app1/subapp2?key3"));
+        assertTrue(aliases.contains("#app1/subapp3?key4"));
     }
 }
-
-// Made with Bob

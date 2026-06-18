@@ -108,7 +108,7 @@ public class VaultConnectorTlsAuthTestCase {
     @NullAndEmptySource
     @ValueSource(strings = {"  ", "\t", "\n"})
     public void testGetSecretFromVaultService(final String token) throws Exception {
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), token, "secret/testing1", permissibleSslAuthConfig, true);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), token, null, permissibleSslAuthConfig, true);
         vaultService.configure();
         assertEquals("password123", getSecret(vaultService, "secret/testing1", "top_secret"));
     }
@@ -119,7 +119,7 @@ public class VaultConnectorTlsAuthTestCase {
      */
     @Test
     public void testGetSecretFromVaultServiceInvalidToken() throws Exception {
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "invalidToken", "secret/testing1", new SslConfig().verify(true), true);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "invalidToken", null, new SslConfig().verify(true), true);
         vaultService.configure();
         assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"),
                 "Correct SSL auth config was provided but token was non-empty and invalid. This should fail.");
@@ -132,7 +132,7 @@ public class VaultConnectorTlsAuthTestCase {
      */
     @Test
     public void testRemoveSecretFromVaultService() throws Exception {
-        final VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", permissibleSslAuthConfig, true);
+        final VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "", null, permissibleSslAuthConfig, true);
         vaultService.configure();
 
         final String originalSecret = getSecret(vaultService, "secret/testing1", "top_secret");

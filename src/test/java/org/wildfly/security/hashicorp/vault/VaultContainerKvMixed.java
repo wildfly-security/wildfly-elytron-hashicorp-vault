@@ -67,20 +67,21 @@ public class VaultContainerKvMixed<SELF extends VaultContainerKvMixed<SELF>> ext
         this.withVaultToken(token)
             .withLogConsumer(new JbossLoggingLogConsumer(Logger.getLogger("KV_MIXED_VAULT_CONTAINER")))
             .withInitCommand(
-                // The default "secret/" mount is KV v2, keep it as-is
-                // Enable KV v1 at a separate mount point
+                // Enable KV v1 at a separate mount point first
                 "secrets enable -version=1 -path=" + KV_V1_MOUNT + " kv",
 
-                // Add test data to KV v1 mount (no /data/ segment)
-                "kv put " + KV_V1_MOUNT + "/testing1 top_secret=password123",
-                "kv put " + KV_V1_MOUNT + "/testing2 dbuser=secretpass jmsuser=jmspass",
-                "kv put " + KV_V1_MOUNT + "/my-secret my-value=s3cr3t",
+                // Upgrade the default "secret/" mount from KV v1 to KV v2
+                "kv enable-versioning " + KV_V2_MOUNT,
 
-                // Add test data to KV v2 mount (default secret/)
-                // Use same values as v1 for consistent test expectations
+                // Add test data to KV v2 mount (kv put handles /data/ path automatically)
                 "kv put " + KV_V2_MOUNT + "/testing1 top_secret=password123",
                 "kv put " + KV_V2_MOUNT + "/testing2 dbuser=secretpass jmsuser=jmspass",
                 "kv put " + KV_V2_MOUNT + "/my-secret my-value=s3cr3t",
+
+                // Add test data to KV v1 mount
+                "kv put " + KV_V1_MOUNT + "/testing1 top_secret=password123",
+                "kv put " + KV_V1_MOUNT + "/testing2 dbuser=secretpass jmsuser=jmspass",
+                "kv put " + KV_V1_MOUNT + "/my-secret my-value=s3cr3t",
 
                 // Enable transit engine for encryption tests
                 "secrets enable transit",
@@ -134,6 +135,10 @@ public class VaultContainerKvMixed<SELF extends VaultContainerKvMixed<SELF>> ext
     public boolean isV2Path(String path) {
         return path != null && path.startsWith(KV_V2_MOUNT + "/");
     }
-}
 
-// Made with Bob
+    @Override
+    public String toString() {
+        return String.format("VaultContainerKvMixed{image=%s, kvV1Mount=%s, kvV2Mount=%s, token=%s, testData=[testing1, testing2, my-secret] in both mounts}",
+                getDockerImageName(), KV_V1_MOUNT, KV_V2_MOUNT, DEFAULT_TOKEN);
+    }
+}

@@ -231,4 +231,10 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
         VaultTestUtils.cleanupDir(this.mountedVaultCertsDir);
         VaultTestUtils.cleanupDir(this.mountedVaultConfigDir);
     }
+
+    @Override
+    public String toString() {
+        return String.format("VaultContainerHttps{image=%s, httpsPort=%d, certsDir=%s, configDir=%s}",
+                getDockerImageName(), HTTPS_PORT, mountedVaultCertsDir, mountedVaultConfigDir);
+    }
 }

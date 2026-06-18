@@ -100,8 +100,8 @@ public class VaultConnectorHttpsTestCase {
         // setup test container with vault
         startVaultTestContainer();
 
-        // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", httpsSslConfig, true);
+        // Test vault service - namespace is null for default namespace
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", null, httpsSslConfig, true);
         vaultService.configure();
         assertEquals("password123", getSecret(vaultService, "secret/testing1", "top_secret"));
     }
@@ -111,8 +111,8 @@ public class VaultConnectorHttpsTestCase {
         // setup test container with vault
         startVaultTestContainer();
 
-        // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", httpsSslConfig, true);
+        // Test vault service - namespace is null for default namespace
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", null, httpsSslConfig, true);
         vaultService.configure();
         putSecret(vaultService, "secret/testing1", "top_secret2", "password2");
 
@@ -124,8 +124,8 @@ public class VaultConnectorHttpsTestCase {
         // setup test container with vault
         startVaultTestContainer();
 
-        // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", httpsSslConfig, true);
+        // Test vault service - namespace is null for default namespace
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", null, httpsSslConfig, true);
         vaultService.configure();
 
         // First verify the secret exists
@@ -165,8 +165,8 @@ public class VaultConnectorHttpsTestCase {
         // setup and start test container with vault
         startVaultTestContainer();
 
-        // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "admin", httpsSslConfig, true);
+        // Test vault service - namespace is null for default namespace
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", null, httpsSslConfig, true);
         vaultService.configure();
         removeSecret(vaultService, "secret/testing1", "top_secret");
     }

@@ -499,79 +499,103 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         return aliases;
     }
 
-    // TODO: Implement alias listing with new alias format
-    // Keep an eye on https://github.com/hashicorp/vault/issues/5275 and remove this logic once hashicorp vault provides this operation
-    // This method needs to be redesigned to work with the new alias format that supports:
-    // - Custom mount paths (not just "secret")
-    // - Nested JSON key paths (not just top-level keys)
-    // - Different engine types (KVv1 vs KVv2)
-    // The current implementation assumes legacy "path.key" format and needs VaultConnector methods that were removed.
+    /**
+     * Recursively collect aliases from Vault using the new alias format.
+     *
+     * This implementation:
+     * - Parses the input path to extract mount and secret path
+     * - Lists secrets at the current path
+     * - For each secret, gets all keys and creates aliases in new format
+     * - Recursively traverses subdirectories if enabled
+     *
+     * @param path the path to list (legacy format like "secret/myapp" or new format like "@secret#myapp")
+     * @param aliases the set to collect aliases into
+     * @param recursive whether to recurse into subdirectories
+     * @param maxDepth maximum recursion depth
+     * @param currentDepth current recursion depth
+     * @param maxNumberOfAliases maximum number of aliases to collect
+     * @throws CredentialStoreException if listing fails
+     */
     private void collectAliasesRecursive(String path, Set<String> aliases, boolean recursive, int maxDepth, int currentDepth, int maxNumberOfAliases) throws CredentialStoreException {
-        throw new UnsupportedOperationException(
-            "Alias listing is not yet implemented for the new alias format. " +
-            "This feature requires redesign to support custom mount paths, nested JSON keys, and different engine types. " +
-            "For now, you must know your alias names explicitly. " +
-            "See https://github.com/wildfly-security/wildfly-elytron-hashicorp-vault/issues/70 for tracking."
-        );
-
-        // Original implementation (commented out - requires removed VaultConnector methods):
-        /*
         if (aliases.size() >= maxNumberOfAliases) {
             return;
         }
 
-        try {
-            Set<String> keys = vaultConnector.getKeysForPath(path);
-            for (String key : keys) {
-                if (aliases.size() >= maxNumberOfAliases) {
-                    return;
-                }
-                aliases.add(path + "." + key);
+        // Parse the path to extract mount and secret path
+        String mountPath = defaultMountPath;
+        String secretPath = path;
+
+        if (path.startsWith("@")) {
+            int hashIndex = path.indexOf('#');
+            if (hashIndex > 0) {
+                mountPath = path.substring(1, hashIndex);
+                secretPath = path.substring(hashIndex + 1);
             }
-        } catch (VaultException e) {
-            if (e.getMessage() != null && e.getMessage().contains("Path does not exist")) {
-                // ignore because this path in the tree can be empty, but other paths not so continue traversal
-            } else {
-                throw ROOT_LOGGER.couldNotReadKeysFromPath(path, currentDepth, recursive, e.getMessage(), e);
-            }
+        } else if (path.startsWith("#")) {
+            secretPath = path.substring(1);
+        } else if (path.contains("/")) {
+            int firstSlash = path.indexOf('/');
+            mountPath = path.substring(0, firstSlash);
+            secretPath = path.substring(firstSlash + 1);
         }
 
-        if (recursive && currentDepth < maxDepth && aliases.size() < maxNumberOfAliases) {
-            try {
-                Set<String> items = vaultConnector.listAllItemsAtPath(path);
-                if (items.isEmpty()) {
-                    return;
-                }
-                for (String item : items) {
-                    if (aliases.size() >= maxNumberOfAliases) {
-                        return;
-                    }
-                    String fullItemPath = normalizePath(path) + "/" + item;
-                    boolean isSubpath = item.endsWith("/");
-                    if (!isSubpath) {
-                        try {
-                            Set<String> keys = vaultConnector.getKeysForPath(fullItemPath);
-                            for (String key : keys) {
-                                if (aliases.size() >= maxNumberOfAliases) {
-                                    return;
-                                }
-                                aliases.add(fullItemPath + "." + key);
-                            }
-                        } catch (VaultException e) {
-                            // Path doesn't have keys or doesn't exist - continue with other paths
-                        }
-                    } else {
-                        collectAliasesRecursive(fullItemPath, aliases, recursive, maxDepth, currentDepth + 1, maxNumberOfAliases);
-                    }
-                }
-            } catch (VaultException e) {
-                String errorMsg = e.getMessage();
-                if (errorMsg != null && errorMsg.contains("403")) {
-                    throw ROOT_LOGGER.forbiddenToListSubpathsAtCredentialStorePath(path, e);
+        // First, try to get keys for the secret at this exact path
+        // This handles the case where the path itself is a secret (e.g., "app1")
+        try {
+            VaultAlias alias = VaultAlias.create(defaultEngineType, mountPath, secretPath, "_placeholder");
+            List<String> keys = vaultConnector.getKeysForSecret(alias);
+            if (keys != null && !keys.isEmpty()) {
+                for (String key : keys) {
+                    if (aliases.size() >= maxNumberOfAliases) return;
+                    aliases.add("#" + secretPath + "?" + key);
                 }
             }
+        } catch (CredentialStoreException e) {
+            // No secret at this path, continue
+            ROOT_LOGGER.tracef(e, "No secret found at path '%s', continuing to check subdirectories", secretPath);
         }
-        */
+
+        // If recursive and we haven't exceeded depth, list subdirectories
+        if (recursive && currentDepth < maxDepth) {
+            try {
+                // List items under this path
+                List<String> items = vaultConnector.listSecretsAtPath(mountPath, secretPath, defaultEngineType);
+
+                if (items != null && !items.isEmpty()) {
+                    // Process items from LIST
+                    for (String item : items) {
+                        if (aliases.size() >= maxNumberOfAliases) return;
+
+                        if (item.endsWith("/")) {
+                            // Subdirectory - recurse into it
+                            String subdirName = item.substring(0, item.length() - 1);
+                            String fullPath = secretPath.isEmpty() ? subdirName : secretPath + "/" + subdirName;
+                            collectAliasesRecursive("@" + mountPath + "#" + fullPath, aliases, recursive, maxDepth, currentDepth + 1, maxNumberOfAliases);
+                        } else {
+                            // Secret - get its keys
+                            String fullPath = secretPath.isEmpty() ? item : secretPath + "/" + item;
+                            try {
+                                VaultAlias alias = VaultAlias.create(defaultEngineType, mountPath, fullPath, "_placeholder");
+                                List<String> keys = vaultConnector.getKeysForSecret(alias);
+                                if (keys != null) {
+                                    for (String key : keys) {
+                                        if (aliases.size() >= maxNumberOfAliases) return;
+                                        aliases.add("#" + fullPath + "?" + key);
+                                    }
+                                }
+                            } catch (CredentialStoreException e) {
+                                // Could not get keys for this secret, continue
+                                ROOT_LOGGER.tracef(e, "Could not read secret at path '%s', skipping", fullPath);
+                            }
+                        }
+                    }
+                }
+            } catch (CredentialStoreException e) {
+                // Re-throw the exception - if recursive listing fails (e.g., due to permissions),
+                // the caller should be notified
+                throw e;
+            }
+        }
     }
 
     private String normalizePath(String path) {

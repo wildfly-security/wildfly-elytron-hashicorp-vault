@@ -96,6 +96,10 @@ public class VaultContainerKvV1<SELF extends VaultContainerKvV1<SELF>> extends V
     public String getToken() {
         return DEFAULT_TOKEN;
     }
-}
 
-// Made with Bob
+    @Override
+    public String toString() {
+        return String.format("VaultContainerKvV1{image=%s, kvVersion=1, mountPath=%s, token=%s, testData=[testing1, testing2, my-secret]}",
+                getDockerImageName(), KV_V1_MOUNT, DEFAULT_TOKEN);
+    }
+}

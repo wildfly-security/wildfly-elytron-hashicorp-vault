@@ -39,8 +39,9 @@ class VaultAlias {
     private final String secretPath;
     private final String keyPath;
 
+
     /**
-     * Private constructor - use {@link #parse(String)} or {@link #parse(String, String, String)} to create instances.
+     * Private constructor - use factory methods to create instances.
      *
      * @param engineType the engine type (KVv1 or KVv2)
      * @param mountPath the mount path
@@ -52,6 +53,48 @@ class VaultAlias {
         this.mountPath = mountPath;
         this.secretPath = secretPath;
         this.keyPath = keyPath;
+    }
+
+    /**
+     * Create a VaultAlias directly from components without parsing.
+     * This method validates the engine type but does not perform URL encoding -
+     * components should already be in their decoded form.
+     *
+     * @param engineType the engine type (KVv1 or KVv2)
+     * @param mountPath the mount path
+     * @param secretPath the secret path
+     * @param keyPath the key path
+     * @return a new VaultAlias instance
+     * @throws CredentialStoreException if the engine type is invalid or any required component is null/empty
+     */
+    static VaultAlias create(String engineType, String mountPath, String secretPath, String keyPath) throws CredentialStoreException {
+        // Validate required parameters
+        if (engineType == null || engineType.isEmpty()) {
+            throw ROOT_LOGGER.engineTypeCannotBeEmpty("direct creation");
+        }
+        if (mountPath == null || mountPath.isEmpty()) {
+            throw ROOT_LOGGER.mountPathCannotBeEmpty("direct creation");
+        }
+        if (secretPath == null || secretPath.isEmpty()) {
+            throw ROOT_LOGGER.secretPathCannotBeEmpty("direct creation");
+        }
+        if (keyPath == null || keyPath.isEmpty()) {
+            throw ROOT_LOGGER.keyPathCannotBeEmpty("direct creation");
+        }
+
+        // Validate engine type
+        if (!engineType.equals("KVv1") && !engineType.equals("KVv2")) {
+            throw ROOT_LOGGER.invalidEngineType(engineType);
+        }
+
+        // Validate key path doesn't contain empty segments (if using nested path syntax)
+        if (keyPath.contains("/")) {
+            if (keyPath.startsWith("/") || keyPath.endsWith("/") || keyPath.contains("//")) {
+                throw ROOT_LOGGER.keyPathContainsEmptySegment(keyPath);
+            }
+        }
+
+        return new VaultAlias(engineType, mountPath, secretPath, keyPath);
     }
 
     /**
@@ -335,6 +378,8 @@ class VaultAlias {
     public String getKeyPath() {
         return keyPath;
     }
+
+
 
     @Override
     public String toString() {

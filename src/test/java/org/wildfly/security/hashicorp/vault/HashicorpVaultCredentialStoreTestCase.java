@@ -58,7 +58,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         attributes.put("namespace", "admin");
         cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
                 IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))), new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
-        PasswordCredential credential = cs.retrieve("secret/testing1.top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, null);
+        PasswordCredential credential = cs.retrieve("#testing1?top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, null);
         assertEquals("password123", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
     }
 
@@ -73,9 +73,9 @@ public class HashicorpVaultCredentialStoreTestCase {
         attributes.put("namespace", "admin");
         hashicorpVaultCredentialStore.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
                 IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))), new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
-        hashicorpVaultCredentialStore.store("secret/testing1.test_secret", createCredentialFromPassword("testPassword"), null);
+        hashicorpVaultCredentialStore.store("#testing1?test_secret", createCredentialFromPassword("testPassword"), null);
         PasswordCredential credential = hashicorpVaultCredentialStore
-                .retrieve("secret/testing1.test_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null,
+                .retrieve("#testing1?test_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null,
                         new CredentialStore.CredentialSourceProtectionParameter(
                 IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))));
         assertEquals("testPassword", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
@@ -85,12 +85,12 @@ public class HashicorpVaultCredentialStoreTestCase {
     public void testPutMaintainsExistingKeys() throws Exception {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
-        store.store("secret/myapp.mp", createCredentialFromPassword("password1"), null);
-        store.store("secret/myapp.mp2", createCredentialFromPassword("password2"), null);
-        PasswordCredential credential1 = store.retrieve("secret/myapp.mp", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
+        store.store("#myapp?mp", createCredentialFromPassword("password1"), null);
+        store.store("#myapp?mp2", createCredentialFromPassword("password2"), null);
+        PasswordCredential credential1 = store.retrieve("#myapp?mp", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
                 null, createProtectionParameter("myroot"));
         assertNotNull(credential1);
-        PasswordCredential credential2 = store.retrieve("secret/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
+        PasswordCredential credential2 = store.retrieve("#myapp?mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
                 null, createProtectionParameter("myroot"));
         assertNotNull(credential2);
     }
@@ -99,14 +99,14 @@ public class HashicorpVaultCredentialStoreTestCase {
     public void testRemoveKeepsOtherKeys() throws Exception {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
-        store.store("secret/myapp.mp", createCredentialFromPassword("password1"), null);
-        store.store("secret/myapp.mp2", createCredentialFromPassword("password2"), null);
-        store.remove("secret/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
-        PasswordCredential remaining = store.retrieve("secret/myapp.mp", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
+        store.store("#myapp?mp", createCredentialFromPassword("password1"), null);
+        store.store("#myapp?mp2", createCredentialFromPassword("password2"), null);
+        store.remove("#myapp?mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
+        PasswordCredential remaining = store.retrieve("#myapp?mp", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
                 null, createProtectionParameter("myroot"));
         assertNotNull(remaining);
         assertEquals("password1", String.valueOf(remaining.getPassword(ClearPassword.class).getPassword()));
-        PasswordCredential removed = store.retrieve("secret/myapp.mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
+        PasswordCredential removed = store.retrieve("#myapp?mp2", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR,
                 null, createProtectionParameter("myroot"));
         assertNull(removed);
     }
@@ -127,16 +127,16 @@ public class HashicorpVaultCredentialStoreTestCase {
         Set<String> aliases = cs.getAliases("secret/testing1");
         assertNotNull(aliases);
         assertFalse(aliases.isEmpty());
-        assertTrue(aliases.contains("secret/testing1.top_secret"));
-        assertFalse(aliases.contains("secret/testing2.dbuser"));
-        assertFalse(aliases.contains("secret/testing2.jmsuser"));
+        assertTrue(aliases.contains("#testing1?top_secret"));
+        assertFalse(aliases.contains("#testing2?dbuser"));
+        assertFalse(aliases.contains("#testing2?jmsuser"));
 
         aliases = cs.getAliases("secret/testing2");
         assertNotNull(aliases);
         assertFalse(aliases.isEmpty());
-        assertTrue(aliases.contains("secret/testing2.dbuser"));
-        assertTrue(aliases.contains("secret/testing2.jmsuser"));
-        assertFalse(aliases.contains("secret/testing1.top_secret"));
+        assertTrue(aliases.contains("#testing2?dbuser"));
+        assertTrue(aliases.contains("#testing2?jmsuser"));
+        assertFalse(aliases.contains("#testing1?top_secret"));
     }
 
     /**
@@ -181,7 +181,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         Set<String> aliases2 = cs.getAliases("secret/testing1", false, 0);
 
         assertEquals(aliases1, aliases2);
-        assertTrue(aliases2.contains("secret/testing1.top_secret"));
+        assertTrue(aliases2.contains("#testing1?top_secret"));
     }
 
     /**
@@ -192,16 +192,16 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
-        cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
-        cs.store("secret/app1/subapp.key3", createCredentialFromPassword("value3"), null);
+        cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        cs.store("#app1?key2", createCredentialFromPassword("value2"), null);
+        cs.store("#app1/subapp?key3", createCredentialFromPassword("value3"), null);
 
         Set<String> aliases = cs.getAliases("secret/app1", true, 0);
 
-        assertTrue(aliases.contains("secret/app1.key1"));
-        assertTrue(aliases.contains("secret/app1.key2"));
+        assertTrue(aliases.contains("#app1?key1"));
+        assertTrue(aliases.contains("#app1?key2"));
         // Should NOT include any subpath keys when depth is 0
-        assertFalse(aliases.contains("secret/app1/subapp.key3"));
+        assertFalse(aliases.contains("#app1/subapp?key3"));
     }
 
     /**
@@ -212,19 +212,19 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
-        cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
-        cs.store("secret/app1/subapp1.key3", createCredentialFromPassword("value3"), null);
-        cs.store("secret/app1/subapp2.key4", createCredentialFromPassword("value4"), null);
-        cs.store("secret/app1/subapp1/deep.key5", createCredentialFromPassword("value5"), null);
+        cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        cs.store("#app1?key2", createCredentialFromPassword("value2"), null);
+        cs.store("#app1/subapp1?key3", createCredentialFromPassword("value3"), null);
+        cs.store("#app1/subapp2?key4", createCredentialFromPassword("value4"), null);
+        cs.store("#app1/subapp1/deep?key5", createCredentialFromPassword("value5"), null);
         Set<String> aliases = cs.getAliases("secret/app1", true, 1);
 
-        assertTrue(aliases.contains("secret/app1.key1"));
-        assertTrue(aliases.contains("secret/app1.key2"));
+        assertTrue(aliases.contains("#app1?key1"));
+        assertTrue(aliases.contains("#app1?key2"));
 
-        assertTrue(aliases.contains("secret/app1/subapp1.key3"));
-        assertTrue(aliases.contains("secret/app1/subapp2.key4"));
-        assertFalse(aliases.contains("secret/app1/subapp1/deep.key5"));
+        assertTrue(aliases.contains("#app1/subapp1?key3"));
+        assertTrue(aliases.contains("#app1/subapp2?key4"));
+        assertFalse(aliases.contains("#app1/subapp1/deep?key5"));
 
     }
 
@@ -236,17 +236,17 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
-        cs.store("secret/app1/subapp1.key2", createCredentialFromPassword("value2"), null);
-        cs.store("secret/app1/subapp1/deep.key3", createCredentialFromPassword("value3"), null);
-        cs.store("secret/app1/subapp1/deep/deeper.key4", createCredentialFromPassword("value4"), null);
+        cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        cs.store("#app1/subapp1?key2", createCredentialFromPassword("value2"), null);
+        cs.store("#app1/subapp1/deep?key3", createCredentialFromPassword("value3"), null);
+        cs.store("#app1/subapp1/deep/deeper?key4", createCredentialFromPassword("value4"), null);
 
         Set<String> aliases = cs.getAliases("secret/app1", true, 2);
-        assertTrue(aliases.contains("secret/app1.key1"));
-        assertTrue(aliases.contains("secret/app1/subapp1.key2"));
-        assertTrue(aliases.contains("secret/app1/subapp1/deep.key3"));
+        assertTrue(aliases.contains("#app1?key1"));
+        assertTrue(aliases.contains("#app1/subapp1?key2"));
+        assertTrue(aliases.contains("#app1/subapp1/deep?key3"));
         // Should NOT include keys deeper than depth 2
-        assertFalse(aliases.contains("secret/app1/subapp1/deep/deeper.key4"));
+        assertFalse(aliases.contains("#app1/subapp1/deep/deeper?key4"));
     }
 
     /**
@@ -257,17 +257,17 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
-        cs.store("secret/app1/subapp1.key2", createCredentialFromPassword("value2"), null);
-        cs.store("secret/app1/subapp2.key3", createCredentialFromPassword("value3"), null);
-        cs.store("secret/app1/subapp3.key4", createCredentialFromPassword("value4"), null);
+        cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        cs.store("#app1/subapp1?key2", createCredentialFromPassword("value2"), null);
+        cs.store("#app1/subapp2?key3", createCredentialFromPassword("value3"), null);
+        cs.store("#app1/subapp3?key4", createCredentialFromPassword("value4"), null);
 
         Set<String> aliases = cs.getAliases("secret/app1", true, 1);
 
-        assertTrue(aliases.contains("secret/app1.key1"));
-        assertTrue(aliases.contains("secret/app1/subapp1.key2"));
-        assertTrue(aliases.contains("secret/app1/subapp2.key3"));
-        assertTrue(aliases.contains("secret/app1/subapp3.key4"));
+        assertTrue(aliases.contains("#app1?key1"));
+        assertTrue(aliases.contains("#app1/subapp1?key2"));
+        assertTrue(aliases.contains("#app1/subapp2?key3"));
+        assertTrue(aliases.contains("#app1/subapp3?key4"));
         assertEquals(4, aliases.size());
     }
 
@@ -279,13 +279,13 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
-        cs.store("secret/app1/subapp1/deep.key2", createCredentialFromPassword("value2"), null);
+        cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        cs.store("#app1/subapp1/deep?key2", createCredentialFromPassword("value2"), null);
 
         Set<String> aliases = cs.getAliases("secret/app1", true, 2);
 
-        assertTrue(aliases.contains("secret/app1.key1"));
-        assertTrue(aliases.contains("secret/app1/subapp1/deep.key2"));
+        assertTrue(aliases.contains("#app1?key1"));
+        assertTrue(aliases.contains("#app1/subapp1/deep?key2"));
     }
 
     /**
@@ -296,16 +296,16 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
-        cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
-        cs.store("secret/app1/subapp1.key3", createCredentialFromPassword("value3"), null);
-        cs.store("secret/app1/subapp1.key4", createCredentialFromPassword("value4"), null);
-        cs.store("secret/app1/subapp2.key5", createCredentialFromPassword("value5"), null);
-        cs.store("secret/app1/subapp2.key6", createCredentialFromPassword("value6"), null);
+        cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        cs.store("#app1?key2", createCredentialFromPassword("value2"), null);
+        cs.store("#app1/subapp1?key3", createCredentialFromPassword("value3"), null);
+        cs.store("#app1/subapp1?key4", createCredentialFromPassword("value4"), null);
+        cs.store("#app1/subapp2?key5", createCredentialFromPassword("value5"), null);
+        cs.store("#app1/subapp2?key6", createCredentialFromPassword("value6"), null);
 
         Set<String> aliases = cs.getAliases("secret/app1", true, 1, 3);
-        assertTrue(aliases.contains("secret/app1.key1"));
-        assertTrue(aliases.contains("secret/app1.key2"));
+        assertTrue(aliases.contains("#app1?key1"));
+        assertTrue(aliases.contains("#app1?key2"));
         assertEquals(3, aliases.size());
     }
 
@@ -317,14 +317,14 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
-        cs.store("secret/app1/subapp1.key2", createCredentialFromPassword("value2"), null);
-        cs.store("secret/app1/subapp1/deep.key3", createCredentialFromPassword("value3"), null);
-        cs.store("secret/app1/subapp2.key4", createCredentialFromPassword("value4"), null);
+        cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        cs.store("#app1/subapp1?key2", createCredentialFromPassword("value2"), null);
+        cs.store("#app1/subapp1/deep?key3", createCredentialFromPassword("value3"), null);
+        cs.store("#app1/subapp2?key4", createCredentialFromPassword("value4"), null);
 
         Set<String> aliases = cs.getAliases("secret/app1", true, 2, 2);
 
-        assertTrue(aliases.contains("secret/app1.key1"));
+        assertTrue(aliases.contains("#app1?key1"));
         assertEquals(2, aliases.size());
     }
 
@@ -336,14 +336,14 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        cs.store("secret/app1.key1", createCredentialFromPassword("value1"), null);
-        cs.store("secret/app1.key2", createCredentialFromPassword("value2"), null);
-        cs.store("secret/app1/subapp1.key3", createCredentialFromPassword("value3"), null);
+        cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
+        cs.store("#app1?key2", createCredentialFromPassword("value2"), null);
+        cs.store("#app1/subapp1?key3", createCredentialFromPassword("value3"), null);
         Set<String> aliases = cs.getAliases("secret/app1", false, 10, 1);
 
         assertEquals(1, aliases.size());
-        assertTrue(aliases.contains("secret/app1.key1") || aliases.contains("secret/app1.key2"));
-        assertFalse(aliases.contains("secret/app1/subapp1.key3"));
+        assertTrue(aliases.contains("#app1?key1") || aliases.contains("#app1?key2"));
+        assertFalse(aliases.contains("#app1/subapp1?key3"));
     }
 
     /**
@@ -353,10 +353,10 @@ public class HashicorpVaultCredentialStoreTestCase {
     public void testCredentialCacheHit() throws Exception {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
-        PasswordCredential first = store.retrieve("secret/testing1.top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        PasswordCredential first = store.retrieve("#testing1?top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
         assertNotNull(first);
         assertEquals("password123", String.valueOf(first.getPassword(ClearPassword.class).getPassword()));
-        PasswordCredential second = store.retrieve("secret/testing1.top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        PasswordCredential second = store.retrieve("#testing1?top_secret", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
         assertSame(first, second);
     }
 
@@ -367,11 +367,11 @@ public class HashicorpVaultCredentialStoreTestCase {
     public void testCredentialCacheInvalidationOnStore() throws Exception {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
-        store.store("secret/cachetest.key1", createCredentialFromPassword("value1"), null);
-        PasswordCredential c1 = store.retrieve("secret/cachetest.key1", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        store.store("#cachetest?key1", createCredentialFromPassword("value1"), null);
+        PasswordCredential c1 = store.retrieve("#cachetest?key1", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
         assertEquals("value1", String.valueOf(c1.getPassword(ClearPassword.class).getPassword()));
-        store.store("secret/cachetest.key1", createCredentialFromPassword("value2"), null);
-        PasswordCredential c2 = store.retrieve("secret/cachetest.key1", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        store.store("#cachetest?key1", createCredentialFromPassword("value2"), null);
+        PasswordCredential c2 = store.retrieve("#cachetest?key1", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
         assertEquals("value2", String.valueOf(c2.getPassword(ClearPassword.class).getPassword()));
     }
 
@@ -382,12 +382,12 @@ public class HashicorpVaultCredentialStoreTestCase {
     public void testCredentialCacheInvalidationOnRemove() throws Exception {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
-        store.store("secret/cachetest.a", createCredentialFromPassword("a"), null);
-        store.store("secret/cachetest.b", createCredentialFromPassword("b"), null);
-        store.retrieve("secret/cachetest.a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
-        store.remove("secret/cachetest.a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
-        assertNull(store.retrieve("secret/cachetest.a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot")));
-        PasswordCredential b = store.retrieve("secret/cachetest.b", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        store.store("#cachetest?a", createCredentialFromPassword("a"), null);
+        store.store("#cachetest?b", createCredentialFromPassword("b"), null);
+        store.retrieve("#cachetest?a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
+        store.remove("#cachetest?a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
+        assertNull(store.retrieve("#cachetest?a", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot")));
+        PasswordCredential b = store.retrieve("#cachetest?b", PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, createProtectionParameter("myroot"));
         assertEquals("b", String.valueOf(b.getPassword(ClearPassword.class).getPassword()));
     }
 
@@ -455,7 +455,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore store = createHashicorpVaultCredentialStore();
         assertThrows(CredentialStoreException.class,
-                () -> store.store("secret/path.key", null, null));
+                () -> store.store("#path?key", null, null));
     }
 
     /**
@@ -710,7 +710,7 @@ public class HashicorpVaultCredentialStoreTestCase {
     public void testStoreNotInitialized() {
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
         assertThrows(CredentialStoreException.class,
-                () -> store.store("secret/path.key", createCredentialFromPassword("v"), null));
+                () -> store.store("#path?key", createCredentialFromPassword("v"), null));
     }
 
     /**
@@ -721,7 +721,7 @@ public class HashicorpVaultCredentialStoreTestCase {
     public void testRetrieveNotInitialized() {
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
         assertThrows(CredentialStoreException.class,
-                () -> store.retrieve("secret/path.key", PasswordCredential.class,
+                () -> store.retrieve("#path?key", PasswordCredential.class,
                         ClearPassword.ALGORITHM_CLEAR, null, null));
     }
 
@@ -733,7 +733,7 @@ public class HashicorpVaultCredentialStoreTestCase {
     public void testRemoveNotInitialized() {
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
         assertThrows(CredentialStoreException.class,
-                () -> store.remove("secret/path.key", PasswordCredential.class,
+                () -> store.remove("#path?key", PasswordCredential.class,
                         ClearPassword.ALGORITHM_CLEAR, null));
     }
 

@@ -31,7 +31,7 @@ import io.github.jopenlibs.vault.response.LogicalResponse;
 /**
  * Vault Connector
  */
-class VaultConnector {
+public class VaultConnector {
 
     private static final Predicate<String> DEFAULT_KV_V1_FALLBACK_PREDICATE = path -> false;
 
@@ -72,13 +72,11 @@ class VaultConnector {
         this.namespace = namespace;
         this.sslConfig = sslConfig;
 
-        // Always create HttpClient for connection pooling efficiency
-        // HttpClient in Java 11+ uses connection pooling by default
-        HttpClient.Builder builder = HttpClient.newBuilder();
         if (sslContext != null) {
-            builder.sslContext(sslContext);
+            this.httpClient = HttpClient.newBuilder().sslContext(sslContext).build();
+        } else {
+            this.httpClient = null;
         }
-        this.httpClient = builder.build();
     }
 
     public VaultConnector(String vaultUrl, JwtConfig jwtConfig, String namespace, SslConfig sslConfig) {
@@ -96,13 +94,11 @@ class VaultConnector {
         this.sslConfig = sslConfig;
         this.jwtConfig = jwtConfig;
 
-        // Always create HttpClient for connection pooling efficiency
-        // HttpClient in Java 11+ uses connection pooling by default
-        HttpClient.Builder builder = HttpClient.newBuilder();
         if (sslContext != null) {
-            builder.sslContext(sslContext);
+            this.httpClient = HttpClient.newBuilder().sslContext(sslContext).build();
+        } else {
+            this.httpClient = null;
         }
-        this.httpClient = builder.build();
     }
 
     public void configure() {
@@ -189,7 +185,7 @@ class VaultConnector {
      * @param alias the parsed vault alias containing engine type and path information
      * @return the appropriate Vault instance for the specified engine type and mount path
      */
-    private synchronized Vault getVaultForAlias(VaultAlias alias) {
+    private synchronized Vault getVaultForAlias(VaultAlias alias) throws CredentialStoreException {
         String engineType = alias.getEngineType();
         String mountPath = alias.getMountPath();
 
@@ -210,14 +206,23 @@ class VaultConnector {
             cacheKey = "KVv2-" + segmentCount;
         }
 
-        return vaultInstanceCache.computeIfAbsent(cacheKey,
-            k -> {
-                try {
-                    return createVaultInstance(kvVersion, segmentCount);
-                } catch (VaultException | CredentialStoreException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+        try {
+            return vaultInstanceCache.computeIfAbsent(cacheKey,
+                k -> {
+                    try {
+                        return createVaultInstance(kvVersion, segmentCount);
+                    } catch (VaultException | CredentialStoreException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+        } catch (RuntimeException e) {
+            // Unwrap CredentialStoreException if it was wrapped in RuntimeException
+            Throwable cause = e.getCause();
+            if (cause instanceof CredentialStoreException) {
+                throw (CredentialStoreException) cause;
+            }
+            throw e;
+        }
     }
 
 
@@ -234,11 +239,19 @@ class VaultConnector {
         VaultConfig config = new VaultConfig()
                 .sslConfig(this.sslConfig)
                 .address(this.vaultUrl)
-                .engineVersion(kvVersion)
-                .prefixPathDepth(prefixPathDepth);
+                .engineVersion(kvVersion);
 
-        // Always use the shared HttpClient for connection pooling
-        config.httpClient(httpClient);
+        // Only set prefixPathDepth if > 1 (library default is 1 for single-segment paths)
+        if (prefixPathDepth > 1) {
+            config.prefixPathDepth(prefixPathDepth);
+        }
+
+        // Use the shared HttpClient only when it has been configured with a custom SSLContext.
+        // Otherwise, let the Vault library create its own client from the SslConfig
+        // (which may include PEM trust certificates that the default HttpClient doesn't know about).
+        if (httpClient != null) {
+            config.httpClient(httpClient);
+        }
 
         if (this.namespace != null && !this.namespace.isEmpty()) {
             config.nameSpace(this.namespace);
@@ -270,7 +283,41 @@ class VaultConnector {
             secretPath = secretPath.substring(1);
         }
 
+        // URL-encode path segments to handle special characters (spaces, etc.)
+        // The Vault library doesn't properly encode path components
+        mountPath = urlEncodePath(mountPath);
+        secretPath = urlEncodePath(secretPath);
+
         return mountPath + "/" + secretPath;
+    }
+
+    /**
+     * URL-encode a path while preserving path separators (/).
+     * Encodes each segment separately to avoid encoding the slashes.
+     */
+    private String urlEncodePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return path;
+        }
+
+        String[] segments = path.split("/", -1);
+        StringBuilder encoded = new StringBuilder();
+
+        for (int i = 0; i < segments.length; i++) {
+            if (i > 0) {
+                encoded.append("/");
+            }
+            try {
+                // Encode each segment, preserving structure
+                encoded.append(java.net.URLEncoder.encode(segments[i], "UTF-8")
+                    .replace("+", "%20")); // Use %20 for spaces instead of +
+            } catch (java.io.UnsupportedEncodingException e) {
+                // UTF-8 is always supported
+                throw new RuntimeException(e);
+            }
+        }
+
+        return encoded.toString();
     }
 
     /**
@@ -282,6 +329,66 @@ class VaultConnector {
      * @return map of all key-value pairs in the secret, or null if secret not found
      * @throws CredentialStoreException if retrieval fails
      */
+    /**
+     * List all secret paths at the given mount and path.
+     *
+     * @param mountPath the mount path (e.g., "secret")
+     * @param secretPath the secret path to list (e.g., "myapp" or "myapp/db")
+     * @param engineType the engine type ("KVv1" or "KVv2")
+     * @return set of subpath names (directories end with "/", secrets don't)
+     * @throws CredentialStoreException if listing fails
+     */
+    public List<String> listSecretsAtPath(String mountPath, String secretPath, String engineType) throws CredentialStoreException {
+        try {
+            // For KV v2, the Vault library automatically adds /metadata/ when listing
+            // So we just pass mount + secret path, and it constructs the full path
+            String listPath;
+            if (secretPath == null || secretPath.isEmpty()) {
+                listPath = mountPath;
+            } else {
+                listPath = mountPath + "/" + secretPath;
+            }
+
+            // Create a Vault instance for listing
+            // Use the mount path segment count for proper /metadata/ insertion
+            int kvVersion = "KVv2".equals(engineType) ? 2 : 1;
+            int segmentCount = countMountPathSegments(mountPath);
+            Vault vault = createVaultInstance(kvVersion, segmentCount);
+            LogicalResponse response = vault.logical().list(listPath);
+            int status = response.getRestResponse().getStatus();
+
+            if (status == 200) {
+                List<String> keys = response.getListData();
+                return keys != null ? keys : new ArrayList<>();
+            } else if (status == 404) {
+                // Path doesn't exist or is empty
+                return new ArrayList<>();
+            } else if (status == 403) {
+                throw ROOT_LOGGER.forbiddenToListSubpathsAtCredentialStorePath(listPath,
+                    new VaultException("HTTP 403 Forbidden"));
+            } else {
+                throw ROOT_LOGGER.couldNotListSecretsAtPath(listPath, status);
+            }
+        } catch (VaultException e) {
+            throw ROOT_LOGGER.couldNotListSecretsAtPath(mountPath + "/" + secretPath, e);
+        }
+    }
+
+    /**
+     * Get all keys (field names) for a secret at the given path.
+     *
+     * @param alias the vault alias specifying the secret location
+     * @return set of key names in the secret
+     * @throws CredentialStoreException if reading fails
+     */
+    public List<String> getKeysForSecret(VaultAlias alias) throws CredentialStoreException {
+        Map<String, Object> secretData = getSecretData(alias);
+        if (secretData == null) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(secretData.keySet());
+    }
+
     public Map<String, Object> getSecretData(VaultAlias alias) throws CredentialStoreException {
         if (alias == null) {
             throw ROOT_LOGGER.vaultAliasCannotBeNull();
@@ -290,10 +397,7 @@ class VaultConnector {
         String path = constructVaultPath(alias);
 
         try {
-            // Get the appropriate Vault instance based on alias engine type
             Vault vault = getVaultForAlias(alias);
-
-            // Fetch from Vault - the library handles path adjustments internally
             LogicalResponse response = vault.logical().read(path);
             int responseStatus = response.getRestResponse().getStatus();
             if (responseStatus == 200) {

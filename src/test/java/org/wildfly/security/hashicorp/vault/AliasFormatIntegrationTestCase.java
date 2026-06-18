@@ -123,7 +123,7 @@ public class AliasFormatIntegrationTestCase {
                 "kv put secret/myapp/database password=secret123 db.host=localhost",
                 "kv put secret/my.app.config password=secret123 db.host=localhost",
                 "kv put secret/team.alpha/app.config password=secret123 db.host=localhost",
-                "kv put secret/test%20path password=secret123",
+                "kv put secret/\"test path\" password=secret123",
 
                 // Custom mount test data
                 "kv put custom/myapp password=secret123",
@@ -161,7 +161,7 @@ public class AliasFormatIntegrationTestCase {
                 "kv put secret/myapp/database password=secret123 db.host=localhost",
                 "kv put secret/my.app.config password=secret123 db.host=localhost",
                 "kv put secret/team.alpha/app.config password=secret123 db.host=localhost",
-                "kv put secret/test%20path password=secret123",
+                "kv put secret/\"test path\" password=secret123",
 
                 // Custom mount test data
                 "kv put custom/myapp password=secret123",
@@ -199,7 +199,7 @@ public class AliasFormatIntegrationTestCase {
                 // KV v2 test data
                 "kv put secret/myapp password=secret123 db.host=localhost",
                 "kv put secret/my.app password=secret123",
-                "kv put secret/test%20path password=secret123",
+                "kv put secret/\"test path\" password=secret123",
                 "kv put custom-v2/myapp password=secret123"
             );
     }

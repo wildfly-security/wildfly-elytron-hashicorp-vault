@@ -128,7 +128,7 @@ public class VaultConnectorJwtAuthTestCase {
      */
     @Test
     public void testGetSecretFromVaultService() throws Exception {
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), validJwtConfig, "secret/testing1", permissibleSslAuthConfig);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), validJwtConfig, null, permissibleSslAuthConfig);
         vaultService.configure();
         assertEquals("password123", getSecret(vaultService, "secret/testing1", "top_secret"));
     }
@@ -139,7 +139,7 @@ public class VaultConnectorJwtAuthTestCase {
      */
     @Test
     public void testGetSecretFromVaultServiceInvalidJwtToken() throws Exception {
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), new JwtConfig("someInvalidToken", ROLE_NAME, "jwt"), "secret/testing1", permissibleSslAuthConfig);
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), new JwtConfig("someInvalidToken", ROLE_NAME, "jwt"), null, permissibleSslAuthConfig);
         vaultService.configure();
         assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"),
                 "Correct SSL HTTPS config was provided but JWT was invalid. This should fail.");
@@ -152,7 +152,7 @@ public class VaultConnectorJwtAuthTestCase {
      */
     @Test
     public void testRemoveSecretFromVaultService() throws Exception {
-        final VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), validJwtConfig, "secret/testing1", permissibleSslAuthConfig);
+        final VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), validJwtConfig, null, permissibleSslAuthConfig);
         vaultService.configure();
 
         final String originalSecret = getSecret(vaultService, "secret/testing1", "top_secret");

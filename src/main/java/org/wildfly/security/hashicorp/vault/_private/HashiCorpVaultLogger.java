@@ -150,13 +150,13 @@ public interface HashiCorpVaultLogger extends BasicLogger {
     CredentialStoreException vaultAllLoginStrategiesFailed();
 
     @Message(id = 35, value = "Alias cannot be null")
-    IllegalArgumentException vaultAliasCannotBeNull();
+    CredentialStoreException vaultAliasCannotBeNull();
 
     @Message(id = 36, value = "Key cannot be null or empty")
-    IllegalArgumentException vaultKeyCannotBeNullOrEmpty();
+    CredentialStoreException vaultKeyCannotBeNullOrEmpty();
 
     @Message(id = 37, value = "Value cannot be null")
-    IllegalArgumentException vaultValueCannotBeNull();
+    CredentialStoreException vaultValueCannotBeNull();
 
     @Message(id = 38, value = "Forbidden to retrieve secret at path: %s")
     CredentialStoreException vaultForbiddenToRetrieveSecretAtPath(String path);
@@ -287,4 +287,10 @@ public interface HashiCorpVaultLogger extends BasicLogger {
     @LogMessage(level = WARN)
     @Message(id = 77, value = "Key path '%s' has deep nesting (%d levels). Consider flattening the JSON structure for better performance and maintainability.")
     void deepKeyPathNesting(String keyPath, int nestingLevel);
+
+    @Message(id = 78, value = "Could not list secrets at path '%s' (HTTP status: %d)")
+    CredentialStoreException couldNotListSecretsAtPath(String path, int httpStatus);
+
+    @Message(id = 79, value = "Could not list secrets at path '%s'")
+    CredentialStoreException couldNotListSecretsAtPath(String path, @Cause Exception e);
 }
