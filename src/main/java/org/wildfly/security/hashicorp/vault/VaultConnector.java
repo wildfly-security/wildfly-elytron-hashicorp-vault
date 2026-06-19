@@ -174,24 +174,43 @@ public class VaultConnector {
      * @param alias the parsed vault alias containing engine type and path information
      * @return the appropriate Vault instance for the specified engine type and mount path
      */
-    private synchronized Vault getVaultForAlias(VaultAlias alias) throws CredentialStoreException {
+    private Vault getVaultForAlias(VaultAlias alias) throws CredentialStoreException {
         String engineType = alias.getEngineType();
         String mountPath = alias.getMountPath();
 
         // Determine KV version and segment count
         final int kvVersion;
         final int segmentCount;
-        final String cacheKey;
 
         if ("KVv1".equals(engineType)) {
             // KV v1 doesn't use /data/ insertion, so segment count doesn't matter
             kvVersion = 1;
             segmentCount = 0; // irrelevant for v1
-            cacheKey = "KVv1";
         } else {
             // KV v2 - need to account for mount path segment count
             kvVersion = 2;
             segmentCount = countMountPathSegments(mountPath);
+        }
+
+        return getOrCreateVaultInstance(kvVersion, segmentCount);
+    }
+
+    /**
+     * Get or create a cached Vault instance for the specified KV version and segment count.
+     * This method ensures that Vault instances are reused efficiently across operations.
+     *
+     * @param kvVersion the KV engine version (1 or 2)
+     * @param segmentCount the number of path segments in the mount path
+     * @return the cached or newly created Vault instance
+     * @throws CredentialStoreException if Vault instance creation fails
+     */
+    private synchronized Vault getOrCreateVaultInstance(int kvVersion, int segmentCount) throws CredentialStoreException {
+        final String cacheKey;
+        if (kvVersion == 1) {
+            // KV v1 doesn't use /data/ insertion, so segment count doesn't matter
+            cacheKey = "KVv1";
+        } else {
+            // KV v2 - need to account for mount path segment count
             cacheKey = "KVv2-" + segmentCount;
         }
 
@@ -338,11 +357,11 @@ public class VaultConnector {
                 listPath = mountPath + "/" + secretPath;
             }
 
-            // Create a Vault instance for listing
+            // Get or create a cached Vault instance for listing
             // Use the mount path segment count for proper /metadata/ insertion
             int kvVersion = VaultAlias.engineTypeToVersion(engineType);
             int segmentCount = countMountPathSegments(mountPath);
-            Vault vault = createVaultInstance(kvVersion, segmentCount);
+            Vault vault = getOrCreateVaultInstance(kvVersion, segmentCount);
             LogicalResponse response = vault.logical().list(listPath);
             int status = response.getRestResponse().getStatus();
 
