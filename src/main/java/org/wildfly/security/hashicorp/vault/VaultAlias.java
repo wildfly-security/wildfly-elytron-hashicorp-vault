@@ -222,48 +222,52 @@ class VaultAlias {
         String secretPath;
         String keyPath;
 
-        String remaining = alias;
+        // Use index-based parsing to reduce GC pressure from intermediate String objects
+        int pos = 0;
+        final int length = alias.length();
 
         // 1. Extract engine type (optional, starts with "engine=")
-        if (remaining.startsWith("engine=")) {
-            int nextDelim = findNextDelimiter(remaining, 7, '@', '#');
+        if (alias.startsWith("engine=")) {
+            pos = 7; // Skip "engine="
+            int nextDelim = findNextDelimiter(alias, pos, '@', '#');
             if (nextDelim == -1) {
                 throw ROOT_LOGGER.invalidEngineSpecificationMissingDelimiter(alias);
             }
-            engineType = remaining.substring(7, nextDelim);
+            engineType = alias.substring(pos, nextDelim);
             if (engineType.isEmpty()) {
                 throw ROOT_LOGGER.engineTypeCannotBeEmpty(alias);
             }
-            remaining = remaining.substring(nextDelim);
+            pos = nextDelim;
         }
 
         // 2. Extract mount path (optional, starts with @)
-        if (remaining.startsWith("@")) {
-            int hashPos = remaining.indexOf('#');
+        if (pos < length && alias.charAt(pos) == '@') {
+            pos++; // Skip @
+            int hashPos = alias.indexOf('#', pos);
             if (hashPos == -1) {
                 throw ROOT_LOGGER.missingHashDelimiterAfterMountPath(alias);
             }
-            mountPath = remaining.substring(1, hashPos);
+            mountPath = alias.substring(pos, hashPos);
             if (mountPath.isEmpty()) {
                 throw ROOT_LOGGER.mountPathCannotBeEmpty(alias);
             }
-            remaining = remaining.substring(hashPos);
+            pos = hashPos;
         }
 
         // 3. Extract secret path (optional # prefix)
         // The # is required only after @ mount path, otherwise it's optional
-        if (remaining.startsWith("#")) {
-            remaining = remaining.substring(1); // Skip # if present
+        if (pos < length && alias.charAt(pos) == '#') {
+            pos++; // Skip # if present
         }
 
         // 4. Find key delimiter (?)
-        int questionPos = remaining.indexOf('?');
+        int questionPos = alias.indexOf('?', pos);
         if (questionPos == -1) {
             throw ROOT_LOGGER.missingQuestionDelimiterBeforeKeyPath(alias);
         }
 
-        secretPath = remaining.substring(0, questionPos);
-        keyPath = remaining.substring(questionPos + 1);
+        secretPath = alias.substring(pos, questionPos);
+        keyPath = alias.substring(questionPos + 1);
 
         // 5. Validate
         if (secretPath.isEmpty()) {
