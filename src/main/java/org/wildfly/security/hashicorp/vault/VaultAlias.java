@@ -250,11 +250,11 @@ class VaultAlias {
             remaining = remaining.substring(hashPos);
         }
 
-        // 3. Extract secret path (required, starts with #)
-        if (!remaining.startsWith("#")) {
-            throw ROOT_LOGGER.secretPathMustStartWithHash(alias);
+        // 3. Extract secret path (optional # prefix)
+        // The # is required only after @ mount path, otherwise it's optional
+        if (remaining.startsWith("#")) {
+            remaining = remaining.substring(1); // Skip # if present
         }
-        remaining = remaining.substring(1); // Skip #
 
         // 4. Find key delimiter (?)
         int questionPos = remaining.indexOf('?');

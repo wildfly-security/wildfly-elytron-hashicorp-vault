@@ -44,6 +44,30 @@ public class VaultAliasParsingTestCase {
     }
 
     @Test
+    void testMinimalFormatWithoutHash() throws CredentialStoreException {
+        // Minimal format without # prefix: secret?key
+        VaultAlias alias = VaultAlias.parse("secret?key");
+
+        assertNotNull(alias);
+        assertEquals("KVv2", alias.getEngineType());
+        assertEquals("secret", alias.getMountPath());
+        assertEquals("secret", alias.getSecretPath());
+        assertEquals("key", alias.getKeyPath());
+    }
+
+    @Test
+    void testSecretPathWithSlashesWithoutHash() throws CredentialStoreException {
+        // Secret path with slashes, no # prefix: myapp/database?password
+        VaultAlias alias = VaultAlias.parse("myapp/database?password");
+
+        assertNotNull(alias);
+        assertEquals("KVv2", alias.getEngineType());
+        assertEquals("secret", alias.getMountPath());
+        assertEquals("myapp/database", alias.getSecretPath());
+        assertEquals("password", alias.getKeyPath());
+    }
+
+    @Test
     void testDotsInSecretPath() throws CredentialStoreException {
         // Dots in secret path: #my.app.config?password
         VaultAlias alias = VaultAlias.parse("#my.app.config?password");
@@ -247,12 +271,12 @@ public class VaultAliasParsingTestCase {
     // ========================================================================
 
     @Test
-    void testMissingHashBeforeSecretPath() {
-        // Missing # before secret path: secret?key
+    void testHashRequiredAfterMountPath() {
+        // When @ mount path is present, # is required before secret path
         CredentialStoreException ex = assertThrows(CredentialStoreException.class,
-            () -> VaultAlias.parse("secret?key"));
+            () -> VaultAlias.parse("@custom-mountsecret?key"));
 
-        // Should indicate invalid format
+        // Should indicate missing # delimiter
         assertNotNull(ex.getMessage());
     }
 
