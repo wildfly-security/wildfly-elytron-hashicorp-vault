@@ -414,7 +414,7 @@ public class VaultAliasParsingTestCase {
     @Test
     void testSimpleLegacyFormat() throws CredentialStoreException {
         // Simple legacy format: myapp/db.password
-        VaultAlias alias = VaultAlias.parseWithLegacySupport(
+        VaultAlias alias = VaultAlias.parse(
             "myapp/db.password", "KVv2", "secret", true);
 
         assertNotNull(alias);
@@ -427,7 +427,7 @@ public class VaultAliasParsingTestCase {
     @Test
     void testLegacyWithDotsInSecretPath() throws CredentialStoreException {
         // Legacy with dots in secret path: app.config.key
-        VaultAlias alias = VaultAlias.parseWithLegacySupport(
+        VaultAlias alias = VaultAlias.parse(
             "app.config.key", "KVv2", "secret", true);
 
         assertNotNull(alias);
@@ -440,7 +440,7 @@ public class VaultAliasParsingTestCase {
     @Test
     void testLegacyWithMultipleDots() throws CredentialStoreException {
         // Legacy with multiple dots: my.app.db.password
-        VaultAlias alias = VaultAlias.parseWithLegacySupport(
+        VaultAlias alias = VaultAlias.parse(
             "my.app.db.password", "KVv2", "secret", true);
 
         assertNotNull(alias);
@@ -454,7 +454,7 @@ public class VaultAliasParsingTestCase {
     void testLegacyFormatNotSupportedThrowsException() {
         // Legacy format with support disabled should throw exception
         CredentialStoreException ex = assertThrows(CredentialStoreException.class,
-            () -> VaultAlias.parseWithLegacySupport(
+            () -> VaultAlias.parse(
                 "myapp/db.password", "KVv2", "secret", false));
 
         assertNotNull(ex.getMessage());
@@ -465,7 +465,7 @@ public class VaultAliasParsingTestCase {
     void testLegacyFormatWithoutDotThrowsException() {
         // Invalid legacy format (no dot): myapp
         CredentialStoreException ex = assertThrows(CredentialStoreException.class,
-            () -> VaultAlias.parseWithLegacySupport(
+            () -> VaultAlias.parse(
                 "myapp", "KVv2", "secret", true));
 
         assertNotNull(ex.getMessage());
@@ -474,7 +474,7 @@ public class VaultAliasParsingTestCase {
     @Test
     void testNewFormatNotTreatedAsLegacy() throws CredentialStoreException {
         // New format should not be treated as legacy even with legacy support enabled
-        VaultAlias alias = VaultAlias.parseWithLegacySupport(
+        VaultAlias alias = VaultAlias.parse(
             "#myapp?password", "KVv2", "secret", true);
 
         assertNotNull(alias);

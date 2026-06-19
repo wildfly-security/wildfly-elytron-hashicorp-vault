@@ -165,18 +165,18 @@ public class VaultConnector {
     }
 
     /**
-     * Get the appropriate Vault instance based on the alias engine type and mount path.
+     * Get the appropriate Vault instance based on the path's engine type and mount path.
      * Creates Vault instances lazily on first use and caches them.
      *
      * For KV v2, different mount path segment counts require different Vault instances
      * because the driver needs to know where to insert the /data/ segment.
      *
-     * @param alias the parsed vault alias containing engine type and path information
+     * @param path the vault path containing engine type and mount path information
      * @return the appropriate Vault instance for the specified engine type and mount path
      */
-    private Vault getVaultForAlias(VaultAlias alias) throws CredentialStoreException {
-        String engineType = alias.getEngineType();
-        String mountPath = alias.getMountPath();
+    private Vault getVaultForPath(VaultPath path) throws CredentialStoreException {
+        String engineType = path.getEngineType();
+        String mountPath = path.getMountPath();
 
         // Determine KV version and segment count
         final int kvVersion;
@@ -274,12 +274,12 @@ public class VaultConnector {
      * Construct the full Vault path from alias components.
      * Combines mount path and secret path with proper formatting.
      *
-     * @param alias the parsed vault alias
+     * @param path the vault path
      * @return the full path for Vault API calls
      */
-    private String constructVaultPath(VaultAlias alias) {
-        String mountPath = alias.getMountPath();
-        String secretPath = alias.getSecretPath();
+    private String constructVaultPath(VaultPath path) {
+        String mountPath = path.getMountPath();
+        String secretPath = path.getSecretPath();
 
         // Ensure mount path doesn't end with /
         if (mountPath.endsWith("/")) {
@@ -385,27 +385,27 @@ public class VaultConnector {
     /**
      * Get all keys (field names) for a secret at the given path.
      *
-     * @param alias the vault alias specifying the secret location
+     * @param path the vault path specifying the secret location
      * @return set of key names in the secret
      * @throws CredentialStoreException if reading fails
      */
-    public List<String> getKeysForSecret(VaultAlias alias) throws CredentialStoreException {
-        Map<String, Object> secretData = getSecretData(alias);
+    public List<String> getKeysForSecret(VaultPath path) throws CredentialStoreException {
+        Map<String, Object> secretData = getSecretData(path);
         if (secretData == null) {
             return new ArrayList<>();
         }
         return new ArrayList<>(secretData.keySet());
     }
 
-    public Map<String, Object> getSecretData(VaultAlias alias) throws CredentialStoreException {
-        if (alias == null) {
+    public Map<String, Object> getSecretData(VaultPath vaultPath) throws CredentialStoreException {
+        if (vaultPath == null) {
             throw ROOT_LOGGER.vaultAliasCannotBeNull();
         }
 
-        String path = constructVaultPath(alias);
+        String path = constructVaultPath(vaultPath);
 
         try {
-            Vault vault = getVaultForAlias(alias);
+            Vault vault = getVaultForPath(vaultPath);
             LogicalResponse response = vault.logical().read(path);
             int responseStatus = response.getRestResponse().getStatus();
             if (responseStatus == 200) {
@@ -428,7 +428,7 @@ public class VaultConnector {
                 return null;
             }
 
-            throw ROOT_LOGGER.vaultFailedToRetrieveSecretHttp(path, alias.getKeyPath(), responseStatus);
+            throw ROOT_LOGGER.vaultFailedToRetrieveSecretHttp(path, vaultPath.getSecretPath(), responseStatus);
         } catch (VaultException e) {
             throw new CredentialStoreException("Failed to retrieve secret from Vault: " + e.getMessage(), e);
         }
@@ -454,7 +454,7 @@ public class VaultConnector {
         String path = constructVaultPath(alias);
 
         try {
-            Vault vault = getVaultForAlias(alias);
+            Vault vault = getVaultForPath(alias);
 
             // Read existing secret data to preserve other keys
             Map<String, Object> secretData = new HashMap<>();
@@ -510,7 +510,7 @@ public class VaultConnector {
         String path = constructVaultPath(alias);
 
         try {
-            Vault vault = getVaultForAlias(alias);
+            Vault vault = getVaultForPath(alias);
 
             // Read existing secret data
             Map<String, Object> secretData = new HashMap<>();

@@ -315,7 +315,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
      * @throws CredentialStoreException if parsing fails
      */
     private VaultAlias parseAlias(String credentialAlias) throws CredentialStoreException {
-        return VaultAlias.parseWithLegacySupport(
+        return VaultAlias.parse(
             credentialAlias,
             this.defaultEngineType,
             this.defaultMountPath,
@@ -526,71 +526,57 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     /**
      * Recursively collect aliases from Vault using the new alias format.
      *
-     * This implementation:
-     * - Parses the input path to extract mount and secret path
-     * - Lists secrets at the current path
-     * - For each secret, gets all keys and creates aliases in new format
-     * - Recursively traverses subdirectories if enabled
+     * <p>This implementation:
+     * <ul>
+     *   <li>Parses the input path to extract engine type, mount path, and secret path</li>
+     *   <li>Lists secrets at the current path</li>
+     *   <li>For each secret, gets all keys and creates aliases in new format</li>
+     *   <li>Recursively traverses subdirectories if enabled</li>
+     * </ul>
      *
-     * @param path the path to list (legacy format like "secret/myapp" or new format like "@secret#myapp")
+     * <p>Supported path formats:
+     * <ul>
+     *   <li>{@code engine=TYPE@mount#secretpath} - Full specification with engine type</li>
+     *   <li>{@code @mount#secretpath} - Explicit mount with default engine type</li>
+     *   <li>{@code #secretpath} - Default mount and engine type</li>
+     *   <li>{@code secretpath} - Minimal format (# is optional)</li>
+     *   <li>{@code mount/secretpath} - Legacy format (only when {@code supportLegacyAliasFormat=true})</li>
+     * </ul>
+     *
+     * @param path the path to list in any supported format
      * @param aliases the set to collect aliases into
      * @param recursive whether to recurse into subdirectories
      * @param maxDepth maximum recursion depth
      * @param currentDepth current recursion depth
      * @param maxNumberOfAliases maximum number of aliases to collect
-     * @throws CredentialStoreException if listing fails
+     * @throws CredentialStoreException if listing fails or path format is invalid
      */
     private void collectAliasesRecursive(String path, Set<String> aliases, boolean recursive, int maxDepth, int currentDepth, int maxNumberOfAliases) throws CredentialStoreException {
         if (aliases.size() >= maxNumberOfAliases) {
             return;
         }
 
-        // Parse the path to extract mount and secret path
-        String mountPath = defaultMountPath;
-        String secretPath = path;
-
-        if (path.equals("/") || path.isEmpty()) {
-            // Special case: "/" or "" means root of default mount (new format)
-            secretPath = "";
-        } else if (path.startsWith("@")) {
-            // New format with explicit mount: @mount#secretpath
-            int hashIndex = path.indexOf('#');
-            if (hashIndex > 0) {
-                mountPath = path.substring(1, hashIndex);
-                secretPath = path.substring(hashIndex + 1);
-            }
-        } else if (path.startsWith("#")) {
-            // New format with default mount: #secretpath
-            secretPath = path.substring(1);
-        } else if (path.contains("/")) {
-            // Could be legacy format: mount/secretpath
-            if (supportLegacyAliasFormat) {
-                // Legacy format enabled - parse as mount/secretpath
-                int firstSlash = path.indexOf('/');
-                mountPath = path.substring(0, firstSlash);
-                secretPath = path.substring(firstSlash + 1);
-            } else {
-                // Legacy format disabled - reject with clear error
-                throw ROOT_LOGGER.legacyPathFormatNotSupported(path);
-            }
-        } else {
-            // Path has no delimiters - could be:
-            // 1. A secret name using default mount (new format)
-            // 2. A mount name for root listing (legacy format, but trailing / was normalized away)
-            // Since we can't distinguish these cases after normalization, treat as secret name
-            secretPath = path;
+        // Parse the path using VaultPath to extract mount and secret path
+        // This handles all formats: engine=TYPE@mount#secretpath, @mount#secretpath,
+        // #secretpath, secretpath, and legacy mount/secretpath (when enabled)
+        VaultPath vaultPath;
+        try {
+            vaultPath = VaultPath.parse(path != null ? path : "", defaultEngineType, defaultMountPath, supportLegacyAliasFormat);
+        } catch (CredentialStoreException e) {
+            // Invalid path format, cannot proceed
+            ROOT_LOGGER.tracef(e, "Failed to parse path '%s'", path);
+            return;
         }
 
-        // Handle empty secret path (root listing)
-        if (secretPath.isEmpty() || secretPath.equals("/")) {
-            secretPath = "";  // Normalize to empty for root
-        }
+        String mountPath = vaultPath.getMountPath();
+        String secretPath = vaultPath.getSecretPath();
+        String engineType = vaultPath.getEngineType();
 
         // First, try to get keys for the secret at this exact path
         // This handles the case where the path itself is a secret (e.g., "app1")
         try {
-            VaultAlias alias = VaultAlias.create(defaultEngineType, mountPath, secretPath, "_placeholder");
-            List<String> keys = vaultConnector.getKeysForSecret(alias);
+            VaultPath secretVaultPath = VaultPath.create(engineType, mountPath, secretPath);
+            List<String> keys = vaultConnector.getKeysForSecret(secretVaultPath);
             if (keys != null && !keys.isEmpty()) {
                 for (String key : keys) {
                     if (aliases.size() >= maxNumberOfAliases) return;
@@ -622,8 +608,8 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                             // Secret - get its keys
                             String fullPath = secretPath.isEmpty() ? item : secretPath + "/" + item;
                             try {
-                                VaultAlias alias = VaultAlias.create(defaultEngineType, mountPath, fullPath, "_placeholder");
-                                List<String> keys = vaultConnector.getKeysForSecret(alias);
+                                VaultPath childVaultPath = VaultPath.create(engineType, mountPath, fullPath);
+                                List<String> keys = vaultConnector.getKeysForSecret(childVaultPath);
                                 if (keys != null) {
                                     for (String key : keys) {
                                         if (aliases.size() >= maxNumberOfAliases) return;

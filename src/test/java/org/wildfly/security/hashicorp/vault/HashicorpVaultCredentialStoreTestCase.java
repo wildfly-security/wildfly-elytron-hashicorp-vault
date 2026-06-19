@@ -818,8 +818,8 @@ public class HashicorpVaultCredentialStoreTestCase {
     }
 
     /**
-     * Test legacy format rejected when supportLegacyAliasFormat=false
-     * "secret/testing1" should throw exception when legacy format is disabled
+     * Test that paths with slashes are treated as new format secret paths when legacy format is disabled.
+     * "secret/testing1" should be interpreted as a secret path (not mount/secret) since # is optional in new format.
      */
     @Test
     public void testGetAliasesLegacyFormatRejected() throws Exception {
@@ -834,13 +834,10 @@ public class HashicorpVaultCredentialStoreTestCase {
                 IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
             new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
 
-        CredentialStoreException ex = assertThrows(
-            CredentialStoreException.class,
-            () -> cs.getAliases("secret/testing1"),
-            "Should reject legacy format when supportLegacyAliasFormat=false"
-        );
-        assertTrue(ex.getMessage().contains("Legacy path format"),
-            "Error message should mention legacy path format, got: " + ex.getMessage());
+        // When legacy format is disabled, "secret/testing1" is treated as a new format secret path
+        // (since # is optional). This should NOT throw an exception.
+        Set<String> aliases = cs.getAliases("secret/testing1");
+        assertNotNull(aliases, "Should return aliases for new format secret path");
     }
 
     /**
@@ -857,5 +854,52 @@ public class HashicorpVaultCredentialStoreTestCase {
 
         assertEquals(aliases1, aliases2, "#testing1 and testing1 should return same results");
         assertTrue(aliases1.contains("#testing1?top_secret"));
+    }
+
+    /**
+     * Test engine= prefix with explicit mount in getAliases()
+     * "engine=KVv2@secret#testing1" should work correctly
+     */
+    @Test
+    public void testGetAliasesWithEngineAndMount() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        Set<String> aliases = cs.getAliases("engine=KVv2@secret#testing1");
+        assertNotNull(aliases);
+        assertTrue(aliases.contains("#testing1?top_secret"),
+            "Should contain #testing1?top_secret when using engine=KVv2@secret#testing1");
+    }
+
+    /**
+     * Test engine= prefix with default mount in getAliases()
+     * "engine=KVv2#testing1" should work correctly
+     */
+    @Test
+    public void testGetAliasesWithEngineDefaultMount() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        Set<String> aliases = cs.getAliases("engine=KVv2#testing1");
+        assertNotNull(aliases);
+        assertTrue(aliases.contains("#testing1?top_secret"),
+            "Should contain #testing1?top_secret when using engine=KVv2#testing1");
+    }
+
+    /**
+     * Test engine= prefix for root path listing
+     * "engine=KVv2@secret#" should list root of secret mount
+     */
+    @Test
+    public void testGetAliasesWithEngineRootPath() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        Set<String> aliases = cs.getAliases("engine=KVv2@secret#", true, 1);
+        assertNotNull(aliases);
+        assertTrue(aliases.contains("#testing1?top_secret"),
+            "Should contain #testing1?top_secret");
+        assertTrue(aliases.contains("#testing2?dbuser"),
+            "Should contain #testing2?dbuser");
     }
 }
