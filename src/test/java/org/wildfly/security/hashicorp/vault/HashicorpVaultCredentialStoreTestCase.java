@@ -124,20 +124,21 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.initialize(attributes, new CredentialStore.CredentialSourceProtectionParameter(
                         IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
                 new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
-        Set<String> aliases = cs.getAliases("secret/testing1");
+        Set<String> aliases = cs.getAliases("@secret#testing1");
         assertNotNull(aliases);
         assertFalse(aliases.isEmpty());
         assertTrue(aliases.contains("#testing1?top_secret"));
         assertFalse(aliases.contains("#testing2?dbuser"));
         assertFalse(aliases.contains("#testing2?jmsuser"));
 
-        aliases = cs.getAliases("secret/testing2");
+        aliases = cs.getAliases("@secret#testing2");
         assertNotNull(aliases);
         assertFalse(aliases.isEmpty());
         assertTrue(aliases.contains("#testing2?dbuser"));
         assertTrue(aliases.contains("#testing2?jmsuser"));
         assertFalse(aliases.contains("#testing1?top_secret"));
     }
+
 
     /**
      * The call must throw a {@link CredentialStoreException} when null path is provided
@@ -177,8 +178,8 @@ public class HashicorpVaultCredentialStoreTestCase {
         vaultTestContainer = startVaultTestContainer();
         HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
 
-        Set<String> aliases1 = cs.getAliases("secret/testing1");
-        Set<String> aliases2 = cs.getAliases("secret/testing1", false, 0);
+        Set<String> aliases1 = cs.getAliases("@secret#testing1");
+        Set<String> aliases2 = cs.getAliases("@secret#testing1", false, 0);
 
         assertEquals(aliases1, aliases2);
         assertTrue(aliases2.contains("#testing1?top_secret"));
@@ -196,7 +197,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("#app1?key2", createCredentialFromPassword("value2"), null);
         cs.store("#app1/subapp?key3", createCredentialFromPassword("value3"), null);
 
-        Set<String> aliases = cs.getAliases("secret/app1", true, 0);
+        Set<String> aliases = cs.getAliases("@secret#app1", true, 0);
 
         assertTrue(aliases.contains("#app1?key1"));
         assertTrue(aliases.contains("#app1?key2"));
@@ -217,7 +218,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("#app1/subapp1?key3", createCredentialFromPassword("value3"), null);
         cs.store("#app1/subapp2?key4", createCredentialFromPassword("value4"), null);
         cs.store("#app1/subapp1/deep?key5", createCredentialFromPassword("value5"), null);
-        Set<String> aliases = cs.getAliases("secret/app1", true, 1);
+        Set<String> aliases = cs.getAliases("@secret#app1", true, 1);
 
         assertTrue(aliases.contains("#app1?key1"));
         assertTrue(aliases.contains("#app1?key2"));
@@ -241,7 +242,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("#app1/subapp1/deep?key3", createCredentialFromPassword("value3"), null);
         cs.store("#app1/subapp1/deep/deeper?key4", createCredentialFromPassword("value4"), null);
 
-        Set<String> aliases = cs.getAliases("secret/app1", true, 2);
+        Set<String> aliases = cs.getAliases("@secret#app1", true, 2);
         assertTrue(aliases.contains("#app1?key1"));
         assertTrue(aliases.contains("#app1/subapp1?key2"));
         assertTrue(aliases.contains("#app1/subapp1/deep?key3"));
@@ -262,7 +263,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("#app1/subapp2?key3", createCredentialFromPassword("value3"), null);
         cs.store("#app1/subapp3?key4", createCredentialFromPassword("value4"), null);
 
-        Set<String> aliases = cs.getAliases("secret/app1", true, 1);
+        Set<String> aliases = cs.getAliases("@secret#app1", true, 1);
 
         assertTrue(aliases.contains("#app1?key1"));
         assertTrue(aliases.contains("#app1/subapp1?key2"));
@@ -282,7 +283,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
         cs.store("#app1/subapp1/deep?key2", createCredentialFromPassword("value2"), null);
 
-        Set<String> aliases = cs.getAliases("secret/app1", true, 2);
+        Set<String> aliases = cs.getAliases("@secret#app1", true, 2);
 
         assertTrue(aliases.contains("#app1?key1"));
         assertTrue(aliases.contains("#app1/subapp1/deep?key2"));
@@ -303,7 +304,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("#app1/subapp2?key5", createCredentialFromPassword("value5"), null);
         cs.store("#app1/subapp2?key6", createCredentialFromPassword("value6"), null);
 
-        Set<String> aliases = cs.getAliases("secret/app1", true, 1, 3);
+        Set<String> aliases = cs.getAliases("@secret#app1", true, 1, 3);
         assertTrue(aliases.contains("#app1?key1"));
         assertTrue(aliases.contains("#app1?key2"));
         assertEquals(3, aliases.size());
@@ -322,7 +323,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("#app1/subapp1/deep?key3", createCredentialFromPassword("value3"), null);
         cs.store("#app1/subapp2?key4", createCredentialFromPassword("value4"), null);
 
-        Set<String> aliases = cs.getAliases("secret/app1", true, 2, 2);
+        Set<String> aliases = cs.getAliases("@secret#app1", true, 2, 2);
 
         assertTrue(aliases.contains("#app1?key1"));
         assertEquals(2, aliases.size());
@@ -339,7 +340,7 @@ public class HashicorpVaultCredentialStoreTestCase {
         cs.store("#app1?key1", createCredentialFromPassword("value1"), null);
         cs.store("#app1?key2", createCredentialFromPassword("value2"), null);
         cs.store("#app1/subapp1?key3", createCredentialFromPassword("value3"), null);
-        Set<String> aliases = cs.getAliases("secret/app1", false, 10, 1);
+        Set<String> aliases = cs.getAliases("@secret#app1", false, 10, 1);
 
         assertEquals(1, aliases.size());
         assertTrue(aliases.contains("#app1?key1") || aliases.contains("#app1?key2"));
@@ -746,5 +747,115 @@ public class HashicorpVaultCredentialStoreTestCase {
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
         assertThrows(CredentialStoreException.class,
                 () -> store.getAliases("secret/"));
+    }
+
+    // =====================================================================
+    // Path format tests for getAliases() - PR #71 implementation
+    // =====================================================================
+
+    /**
+     * Test root path listing with legacy format (mount/)
+     * When supportLegacyAliasFormat=true, "secret/" should list root of secret mount
+     */
+    @Test
+    public void testGetAliasesRootPathLegacyFormat() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        attributes.put("namespace", "admin");
+        attributes.put("support-legacy-alias-format", "true");
+
+        HashicorpVaultCredentialStore cs = new HashicorpVaultCredentialStore();
+        cs.initialize(attributes,
+            new CredentialStore.CredentialSourceProtectionParameter(
+                IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
+            new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+
+        Set<String> aliases = cs.getAliases("secret/", true, 1);
+        assertNotNull(aliases);
+        assertTrue(aliases.contains("#testing1?top_secret"), "Should contain #testing1?top_secret");
+        assertTrue(aliases.contains("#testing2?dbuser"), "Should contain #testing2?dbuser. Got: " + aliases);
+        assertTrue(aliases.contains("#testing2?jmsuser"), "Should contain #testing2?jmsuser. Got: " + aliases);
+    }
+
+    /**
+     * Test root path listing with new format (@mount#)
+     * "@secret#" should list root of secret mount
+     */
+    @Test
+    public void testGetAliasesRootPathNewFormat() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        Set<String> aliases = cs.getAliases("@secret#", true, 1);
+        assertNotNull(aliases);
+        assertTrue(aliases.contains("#testing1?top_secret"), "Should contain #testing1?top_secret");
+        assertTrue(aliases.contains("#testing2?dbuser"), "Should contain #testing2?dbuser");
+        assertTrue(aliases.contains("#testing2?jmsuser"), "Should contain #testing2?jmsuser");
+    }
+
+    /**
+     * Test root path with default mount - all these formats should be equivalent
+     * "#", "#/", "/", and "" should all list root of default mount
+     */
+    @Test
+    public void testGetAliasesRootPathDefaultMount() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        // All these should be equivalent and list root of default mount (secret)
+        Set<String> aliases1 = cs.getAliases("#", true, 1);
+        Set<String> aliases2 = cs.getAliases("#/", true, 1);
+        Set<String> aliases3 = cs.getAliases("/", true, 1);
+
+        // Verify all return the same results
+        assertEquals(aliases1, aliases2, "#  and #/ should return same results");
+        assertEquals(aliases1, aliases3, "# and / should return same results");
+
+        // Verify they contain expected aliases
+        assertTrue(aliases1.contains("#testing1?top_secret"));
+        assertTrue(aliases1.contains("#testing2?dbuser"));
+    }
+
+    /**
+     * Test legacy format rejected when supportLegacyAliasFormat=false
+     * "secret/testing1" should throw exception when legacy format is disabled
+     */
+    @Test
+    public void testGetAliasesLegacyFormatRejected() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("host-address", vaultTestContainer.getHttpHostAddress());
+        attributes.put("support-legacy-alias-format", "false");
+
+        HashicorpVaultCredentialStore cs = new HashicorpVaultCredentialStore();
+        cs.initialize(attributes,
+            new CredentialStore.CredentialSourceProtectionParameter(
+                IdentityCredentials.NONE.withCredential(createCredentialFromPassword("myroot"))),
+            new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+
+        CredentialStoreException ex = assertThrows(
+            CredentialStoreException.class,
+            () -> cs.getAliases("secret/testing1"),
+            "Should reject legacy format when supportLegacyAliasFormat=false"
+        );
+        assertTrue(ex.getMessage().contains("Legacy path format"),
+            "Error message should mention legacy path format, got: " + ex.getMessage());
+    }
+
+    /**
+     * Test path equivalence: #path and path are equivalent
+     * Both "#testing1" and "testing1" should return the same results
+     */
+    @Test
+    public void testGetAliasesPathEquivalence() throws Exception {
+        vaultTestContainer = startVaultTestContainer();
+        HashicorpVaultCredentialStore cs = createHashicorpVaultCredentialStore();
+
+        Set<String> aliases1 = cs.getAliases("#testing1");
+        Set<String> aliases2 = cs.getAliases("testing1");
+
+        assertEquals(aliases1, aliases2, "#testing1 and testing1 should return same results");
+        assertTrue(aliases1.contains("#testing1?top_secret"));
     }
 }

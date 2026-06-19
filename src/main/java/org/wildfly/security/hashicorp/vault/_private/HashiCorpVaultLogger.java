@@ -293,4 +293,7 @@ public interface HashiCorpVaultLogger extends BasicLogger {
 
     @Message(id = 79, value = "Could not list secrets at path '%s'")
     CredentialStoreException couldNotListSecretsAtPath(String path, @Cause Exception e);
+
+    @Message(id = 80, value = "Legacy path format '%s' is not supported when supportLegacyAliasFormat is disabled. Use '@mount#secretpath' or '#secretpath' format instead.")
+    CredentialStoreException legacyPathFormatNotSupported(String path);
 }

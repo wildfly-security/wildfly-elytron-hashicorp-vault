@@ -368,11 +368,30 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     /**
      * Get aliases from a specific path in Vault with optional recursive traversal.
+     * <p>
+     * Path format depends on the {@code supportLegacyAliasFormat} configuration:
+     * <ul>
+     *   <li><b>New format</b> (always supported):
+     *     <ul>
+     *       <li>{@code @mount#secretpath} - explicit mount and secret path</li>
+     *       <li>{@code #secretpath} - default mount with secret path</li>
+     *       <li>{@code secretpath} - default mount with secret path (# is optional)</li>
+     *       <li>{@code /} or {@code ""} - root of default mount</li>
+     *       <li>{@code @mount#} or {@code @mount#/} - root of explicit mount</li>
+     *     </ul>
+     *   </li>
+     *   <li><b>Legacy format</b> (only when {@code supportLegacyAliasFormat=true}):
+     *     <ul>
+     *       <li>{@code mount/secretpath} - mount point and secret path separated by first /</li>
+     *       <li>{@code mount/} - root of mount point</li>
+     *     </ul>
+     *   </li>
+     * </ul>
      *
      * @param path the Vault path to start listing from. If null or empty, throw exception
      * @param recursive if true, traverse subpaths; if false, only list aliases at the specified path
      * @return set of aliases in format "path.key", containing at most 10,000 aliases
-     * @throws CredentialStoreException if listing aliases fails
+     * @throws CredentialStoreException if listing aliases fails or if legacy format is used when not supported
      */
     public Set<String> getAliases(String path, boolean recursive) throws CredentialStoreException {
         if (!initialized) {
@@ -386,13 +405,32 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     /**
      * Get aliases from a specific path in Vault with optional recursive traversal.
+     * <p>
+     * Path format depends on the {@code supportLegacyAliasFormat} configuration:
+     * <ul>
+     *   <li><b>New format</b> (always supported):
+     *     <ul>
+     *       <li>{@code @mount#secretpath} - explicit mount and secret path</li>
+     *       <li>{@code #secretpath} - default mount with secret path</li>
+     *       <li>{@code secretpath} - default mount with secret path (# is optional)</li>
+     *       <li>{@code /} or {@code ""} - root of default mount</li>
+     *       <li>{@code @mount#} or {@code @mount#/} - root of explicit mount</li>
+     *     </ul>
+     *   </li>
+     *   <li><b>Legacy format</b> (only when {@code supportLegacyAliasFormat=true}):
+     *     <ul>
+     *       <li>{@code mount/secretpath} - mount point and secret path separated by first /</li>
+     *       <li>{@code mount/} - root of mount point</li>
+     *     </ul>
+     *   </li>
+     * </ul>
      *
      * @param path the Vault path to start listing from. If null or empty, throw exception
      * @param recursive if true, traverse subpaths; if false, only list aliases at the specified path
      * @param recursiveDepth the maximum depth to traverse if recursive is true. 0 means only the specified path,
      *                       1 means one level deep, etc. Ignored if recursive is false.
      * @return set of aliases in format "path.key", containing at most 10,000 aliases
-     * @throws CredentialStoreException if listing aliases fails
+     * @throws CredentialStoreException if listing aliases fails or if legacy format is used when not supported
      */
     public Set<String> getAliases(String path, boolean recursive, int recursiveDepth) throws CredentialStoreException {
         if (!initialized) {
@@ -404,7 +442,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (recursiveDepth < 0) {
             throw ROOT_LOGGER.recursiveDepthMustBeNonNegative(recursiveDepth);
         }
-        return collectAliases(normalizePath(path), recursive, recursiveDepth);
+        return collectAliases(path, recursive, recursiveDepth);
     }
 
     /**
@@ -431,7 +469,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (maxNumberOfAliases <= 0) {
             throw ROOT_LOGGER.maxNumberOfAliasesMustBePositive(maxNumberOfAliases);
         }
-        return collectAliases(normalizePath(path), recursive, recursiveDepth, maxNumberOfAliases);
+        return collectAliases(path, recursive, recursiveDepth, maxNumberOfAliases);
     }
 
     private final HashicorpVaultCredentialStoreExtension credentialStoreExtension = new HashicorpVaultCredentialStoreExtension() {
@@ -511,18 +549,41 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         String mountPath = defaultMountPath;
         String secretPath = path;
 
-        if (path.startsWith("@")) {
+        if (path.equals("/") || path.isEmpty()) {
+            // Special case: "/" or "" means root of default mount (new format)
+            secretPath = "";
+        } else if (path.startsWith("@")) {
+            // New format with explicit mount: @mount#secretpath
             int hashIndex = path.indexOf('#');
             if (hashIndex > 0) {
                 mountPath = path.substring(1, hashIndex);
                 secretPath = path.substring(hashIndex + 1);
             }
         } else if (path.startsWith("#")) {
+            // New format with default mount: #secretpath
             secretPath = path.substring(1);
         } else if (path.contains("/")) {
-            int firstSlash = path.indexOf('/');
-            mountPath = path.substring(0, firstSlash);
-            secretPath = path.substring(firstSlash + 1);
+            // Could be legacy format: mount/secretpath
+            if (supportLegacyAliasFormat) {
+                // Legacy format enabled - parse as mount/secretpath
+                int firstSlash = path.indexOf('/');
+                mountPath = path.substring(0, firstSlash);
+                secretPath = path.substring(firstSlash + 1);
+            } else {
+                // Legacy format disabled - reject with clear error
+                throw ROOT_LOGGER.legacyPathFormatNotSupported(path);
+            }
+        } else {
+            // Path has no delimiters - could be:
+            // 1. A secret name using default mount (new format)
+            // 2. A mount name for root listing (legacy format, but trailing / was normalized away)
+            // Since we can't distinguish these cases after normalization, treat as secret name
+            secretPath = path;
+        }
+
+        // Handle empty secret path (root listing)
+        if (secretPath.isEmpty() || secretPath.equals("/")) {
+            secretPath = "";  // Normalize to empty for root
         }
 
         // First, try to get keys for the secret at this exact path
