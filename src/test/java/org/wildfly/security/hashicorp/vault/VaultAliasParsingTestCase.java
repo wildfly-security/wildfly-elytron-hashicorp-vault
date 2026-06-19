@@ -354,6 +354,34 @@ public class VaultAliasParsingTestCase {
 
         assertNotNull(ex.getMessage());
     }
+    @Test
+    void testEngineTypeToVersionWithValidTypes() throws CredentialStoreException {
+        // Test valid engine types
+        VaultAlias aliasV1 = VaultAlias.parse("engine=KVv1#secret?key");
+        assertEquals(1, aliasV1.getKvVersion());
+
+        VaultAlias aliasV2 = VaultAlias.parse("engine=KVv2#secret?key");
+        assertEquals(2, aliasV2.getKvVersion());
+    }
+
+    @Test
+    void testEngineTypeToVersionWithInvalidType() {
+        // Test that engineTypeToVersion throws exception for invalid engine type
+        CredentialStoreException ex = assertThrows(CredentialStoreException.class,
+            () -> VaultAlias.engineTypeToVersion("InvalidType"));
+
+        assertNotNull(ex.getMessage());
+    }
+
+    @Test
+    void testEngineTypeToVersionWithNullType() {
+        // Test that engineTypeToVersion throws exception for null
+        CredentialStoreException ex = assertThrows(CredentialStoreException.class,
+            () -> VaultAlias.engineTypeToVersion(null));
+
+        assertNotNull(ex.getMessage());
+    }
+
 
     // ========================================================================
     // Legacy Format Tests

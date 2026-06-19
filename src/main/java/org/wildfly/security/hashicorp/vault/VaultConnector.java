@@ -340,7 +340,7 @@ public class VaultConnector {
 
             // Create a Vault instance for listing
             // Use the mount path segment count for proper /metadata/ insertion
-            int kvVersion = "KVv2".equals(engineType) ? 2 : 1;
+            int kvVersion = VaultAlias.engineTypeToVersion(engineType);
             int segmentCount = countMountPathSegments(mountPath);
             Vault vault = createVaultInstance(kvVersion, segmentCount);
             LogicalResponse response = vault.logical().list(listPath);

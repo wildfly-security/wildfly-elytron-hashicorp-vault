@@ -379,6 +379,38 @@ class VaultAlias {
         return keyPath;
     }
 
+    /**
+     * Convert the engine type string to a KV version number.
+     *
+     * @return 1 for KVv1, 2 for KVv2
+     * @throws CredentialStoreException if the engine type is not a valid KV version
+     */
+    public int getKvVersion() throws CredentialStoreException {
+        return engineTypeToVersion(engineType);
+    }
+
+    /**
+     * Convert an engine type string to a KV version number.
+     * This is a utility method that can be used without creating a VaultAlias instance.
+     *
+     * @param engineType the engine type string (e.g., "KVv1", "KVv2")
+     * @return 1 for KVv1, 2 for KVv2
+     * @throws CredentialStoreException if the engine type is not a valid KV version
+     */
+    static int engineTypeToVersion(String engineType) throws CredentialStoreException {
+        if (engineType == null) {
+            throw ROOT_LOGGER.invalidEngineType("null");
+        }
+        switch (engineType) {
+            case "KVv1":
+                return 1;
+            case "KVv2":
+                return 2;
+            default:
+                throw ROOT_LOGGER.invalidEngineType(engineType);
+        }
+    }
+
 
 
     @Override
