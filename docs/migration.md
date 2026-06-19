@@ -565,6 +565,81 @@ test?path → test%3Fpath
 3. Test with simple paths first, then add encoding
 4. Review URL encoding documentation
 
+### Issue: Checking Logs and Enabling Debug Logging
+
+**When to use:** Any troubleshooting scenario - logs provide detailed information about what's happening.
+
+**Log File Locations:**
+- **Standalone mode:** `$JBOSS_HOME/standalone/log/server.log`
+- **Domain mode:** `$JBOSS_HOME/domain/servers/{server-name}/log/server.log`
+
+**Enable Debug Logging:**
+
+Add to your WildFly configuration (standalone.xml or domain.xml):
+
+```xml
+<subsystem xmlns="urn:jboss:domain:logging:8.0">
+    <logger category="org.wildfly.security.hashicorp.vault">
+        <level name="DEBUG"/>
+    </logger>
+</subsystem>
+```
+
+Or use CLI:
+
+```bash
+/subsystem=logging/logger=org.wildfly.security.hashicorp.vault:add(level=DEBUG)
+reload
+```
+
+**Enable Trace Logging (for detailed operations):**
+
+```bash
+/subsystem=logging/logger=org.wildfly.security.hashicorp.vault:write-attribute(name=level,value=TRACE)
+reload
+```
+
+**What to Look For:**
+
+1. **Configuration Issues:**
+   ```
+   ELYHCVT0024: Failed to configure Vault connection to https://vault.example.com:8200
+   ```
+   Check: host-address, port, TLS settings, authentication
+
+2. **Authentication Problems:**
+   ```
+   ELYHCVT0034: All login strategies failed
+   ```
+   Check: vault token, TLS certificates, authentication-context
+
+3. **Alias Format Issues:**
+   ```
+   ELYHCVT0074: Invalid alias format: ...
+   ```
+   Check: alias syntax, delimiters, URL encoding
+
+4. **Secret Not Found:**
+   ```
+   ELYHCVT0029: Secret not found at path: secret/myapp/database
+   ```
+   Check: path exists in Vault, permissions, KV version
+
+5. **Legacy Format Warnings:**
+   ```
+   ELYHCVT0072: Legacy alias format detected: 'secret.myapp.password'
+   ```
+   Action: Migrate to new format
+
+**Troubleshooting Workflow:**
+
+1. Check server.log for ELYHCVT error codes
+2. Enable DEBUG logging if needed
+3. Reproduce the issue
+4. Look for error messages with context
+5. Enable TRACE logging for detailed operation flow
+6. Check Vault audit logs for corresponding access attempts
+
 ## Support and Resources
 
 ### Documentation
