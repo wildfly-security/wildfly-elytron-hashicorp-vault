@@ -4,12 +4,12 @@
  */
 package org.wildfly.security.hashicorp.vault.auth;
 
+import java.security.PrivateKey;
+
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.lang.JoseException;
-
-import java.security.PrivateKey;
 
 /**
  * Utility to generate JWTs based on jose4j

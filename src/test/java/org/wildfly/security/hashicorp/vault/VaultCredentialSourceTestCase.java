@@ -4,18 +4,19 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.github.jopenlibs.vault.SslConfig;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.io.IOException;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.vault.VaultContainer;
 import org.wildfly.security.credential.PasswordCredential;
 import org.wildfly.security.password.interfaces.ClearPassword;
 
-import java.io.IOException;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import io.github.jopenlibs.vault.SslConfig;
 
 public class VaultCredentialSourceTestCase {
 
@@ -33,8 +34,8 @@ public class VaultCredentialSourceTestCase {
         // setup and start test container with vault
         vaultTestContainer = VaultTestUtils.startVaultTestContainer();
 
-        // Start Vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "/v1/secret/data/testing2", new SslConfig().verify(true).build(), true);
+        // Start Vault service (namespace should be null for non-Enterprise Vault)
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", null, new SslConfig().verify(true).build(), true);
 
         // Test credential source with vault service
         VaultCredentialSource credentialSource = new VaultCredentialSource(vaultService, "secret/testing1", "top_secret");
@@ -47,8 +48,8 @@ public class VaultCredentialSourceTestCase {
         // setup and start test container with vault
         vaultTestContainer = VaultTestUtils.startVaultTestContainer();
 
-        // Start Vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", "/v1/secret/data/testing2", new SslConfig().verify(true).build(), true);
+        // Start Vault service (namespace should be null for non-Enterprise Vault)
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "myroot", null, new SslConfig().verify(true).build(), true);
 
         // Test credential source with vault service
         VaultCredentialSource credentialSource = new VaultCredentialSource(vaultService, "secret/testing1", "incorrect");
@@ -60,8 +61,8 @@ public class VaultCredentialSourceTestCase {
     public void testGetSecretFromVaultServiceFailsWithIncorrectToken() throws Exception {
         // setup and start test container with vault
         vaultTestContainer = VaultTestUtils.startVaultTestContainer();
-        // Start Vault service
-        VaultConnector vaultConnector = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "incorrect", "/v1/secret/data/testing2", new SslConfig().verify(true).build(), true);
+        // Start Vault service (namespace should be null for non-Enterprise Vault)
+        VaultConnector vaultConnector = new VaultConnector(vaultTestContainer.getHttpHostAddress(), "incorrect", null, new SslConfig().verify(true).build(), true);
 
         // Test credential source with vault service
         VaultCredentialSource credentialSource = new VaultCredentialSource(vaultConnector, "secret/testing1", "incorrect");

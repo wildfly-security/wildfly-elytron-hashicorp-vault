@@ -4,11 +4,14 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+
+import java.security.Security;
+
+import org.junit.jupiter.api.Test;
+import org.wildfly.security.credential.store.CredentialStore;
 
 /**
  * Unit tests for {@link HashicorpVaultCredentialStoreProvider}.
@@ -45,5 +48,22 @@ public class HashicorpVaultCredentialStoreProviderTestCase {
     public void testProviderRegistersCredentialStoreService() {
         HashicorpVaultCredentialStoreProvider provider = HashicorpVaultCredentialStoreProvider.getInstance();
         assertNotNull(provider.getService("CredentialStore", "HashicorpVaultCredentialStore"));
+    }
+
+    /**
+     * Verify that the package-private {@code HashicorpVaultCredentialStore} class can be instantiated
+     * via the Security Provider framework using reflection.
+     * Test passes when {@code CredentialStore.getInstance()} successfully returns a non-null instance.
+     */
+    @Test
+    public void testCredentialStoreCanBeInstantiatedViaSecurityProvider() throws Exception {
+        HashicorpVaultCredentialStoreProvider provider = HashicorpVaultCredentialStoreProvider.getInstance();
+        Security.addProvider(provider);
+        try {
+            CredentialStore credentialStore = CredentialStore.getInstance("HashicorpVaultCredentialStore", provider);
+            assertNotNull(credentialStore);
+        } finally {
+            Security.removeProvider(provider.getName());
+        }
     }
 }

@@ -4,7 +4,9 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.github.jopenlibs.vault.VaultException;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -13,8 +15,7 @@ import org.wildfly.security.hashicorp.vault.loginstrategy.JwtLoginStrategy;
 import org.wildfly.security.hashicorp.vault.loginstrategy.LoginContext;
 import org.wildfly.security.hashicorp.vault.loginstrategy.TokenLoginStrategy;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import io.github.jopenlibs.vault.VaultException;
 
 /**
  * Unit tests for {@link TokenLoginStrategy} and {@link JwtLoginStrategy}.

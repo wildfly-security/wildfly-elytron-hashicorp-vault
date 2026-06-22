@@ -4,11 +4,20 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.smallrye.certs.CertificateFiles;
-import io.smallrye.certs.CertificateGenerator;
-import io.smallrye.certs.CertificateRequest;
-import io.smallrye.certs.Format;
-import io.smallrye.certs.PemCertificateFiles;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.Provider;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.net.ssl.SSLContext;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,18 +33,11 @@ import org.wildfly.security.password.WildFlyElytronPasswordProvider;
 import org.wildfly.security.password.interfaces.ClearPassword;
 import org.wildfly.security.password.spec.ClearPasswordSpec;
 
-import javax.net.ssl.SSLContext;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.Provider;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import io.smallrye.certs.CertificateFiles;
+import io.smallrye.certs.CertificateGenerator;
+import io.smallrye.certs.CertificateRequest;
+import io.smallrye.certs.Format;
+import io.smallrye.certs.PemCertificateFiles;
 
 /**
  * Tests that {@link HashicorpVaultCredentialStore} works with TLS certificate authentication,
@@ -84,7 +86,7 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
     @Test
     public void testCertAuthWithNullProtectionParameter() throws Exception {
         HashicorpVaultCredentialStore store = createStoreWithCertAuth(null);
-        PasswordCredential credential = store.retrieve("secret/testing1.top_secret",
+        PasswordCredential credential = store.retrieve("#testing1?top_secret",
                 PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, null);
         assertNotNull(credential);
         assertEquals("password123", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
@@ -99,7 +101,7 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
     public void testCertAuthWithWhitespaceToken(String token) throws Exception {
         HashicorpVaultCredentialStore store = createStoreWithCertAuth(
                 createProtectionParameter(token));
-        PasswordCredential credential = store.retrieve("secret/testing1.top_secret",
+        PasswordCredential credential = store.retrieve("#testing1?top_secret",
                 PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, null);
         assertNotNull(credential);
         assertEquals("password123", String.valueOf(credential.getPassword(ClearPassword.class).getPassword()));
@@ -114,17 +116,17 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
         HashicorpVaultCredentialStore store = createStoreWithCertAuth(null);
 
         PasswordCredential credential = createCredentialFromPassword("mySecretValue");
-        store.store("secret/certtest.password", credential, null);
+        store.store("#certtest?password", credential, null);
 
-        PasswordCredential retrieved = store.retrieve("secret/certtest.password",
+        PasswordCredential retrieved = store.retrieve("#certtest?password",
                 PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, null);
         assertNotNull(retrieved);
         assertEquals("mySecretValue", String.valueOf(retrieved.getPassword(ClearPassword.class).getPassword()));
 
-        store.remove("secret/certtest.password", PasswordCredential.class,
+        store.remove("#certtest?password", PasswordCredential.class,
                 ClearPassword.ALGORITHM_CLEAR, null);
 
-        PasswordCredential afterRemove = store.retrieve("secret/certtest.password",
+        PasswordCredential afterRemove = store.retrieve("#certtest?password",
                 PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null, null);
         assertNull(afterRemove);
     }
@@ -155,9 +157,11 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
             store.setSslContext(wrongSslContext);
             Map<String, String> attributes = new HashMap<>();
             attributes.put("host-address", vaultTestContainer.composeHttpsHostAddress());
+            store.initialize(attributes, null, new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+            // Exception should be thrown when attempting to use the store
             assertThrows(CredentialStoreException.class,
-                    () -> store.initialize(attributes, null,
-                            new Provider[]{WildFlyElytronPasswordProvider.getInstance()}));
+                    () -> store.retrieve("#testing1?top_secret", PasswordCredential.class,
+                            ClearPassword.ALGORITHM_CLEAR, null, null));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }
@@ -176,9 +180,11 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
         store.setSslContext(trustOnlyContext);
         Map<String, String> attributes = new HashMap<>();
         attributes.put("host-address", vaultTestContainer.composeHttpsHostAddress());
+        store.initialize(attributes, null, new Provider[]{WildFlyElytronPasswordProvider.getInstance()});
+        // Exception should be thrown when attempting to use the store
         assertThrows(CredentialStoreException.class,
-                () -> store.initialize(attributes, null,
-                        new Provider[]{WildFlyElytronPasswordProvider.getInstance()}));
+                () -> store.retrieve("#testing1?top_secret", PasswordCredential.class,
+                        ClearPassword.ALGORITHM_CLEAR, null, null));
     }
 
     private HashicorpVaultCredentialStore createStoreWithCertAuth(

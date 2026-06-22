@@ -4,6 +4,21 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
+import javax.net.ssl.SSLContext;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.wildfly.security.credential.store.CredentialStoreException;
+import org.wildfly.security.hashicorp.vault.auth.TlsCertAuthConfig;
+
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.VaultException;
 import io.smallrye.certs.CertificateFiles;
@@ -11,17 +26,6 @@ import io.smallrye.certs.CertificateGenerator;
 import io.smallrye.certs.CertificateRequest;
 import io.smallrye.certs.Format;
 import io.smallrye.certs.PemCertificateFiles;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.wildfly.security.hashicorp.vault.auth.TlsCertAuthConfig;
-
-import javax.net.ssl.SSLContext;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Negative TLS tests with mutual TLS enforcement ({@code tls_require_and_verify_client_cert = true}).
@@ -65,6 +69,20 @@ public class VaultConnectorMutualTlsTestCase {
     }
 
     /**
+     * Helper method to get a secret value using the new alias-based API.
+     */
+    private String getSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        Map<String, Object> data = connector.getSecretData(alias);
+        if (data == null) {
+            return null;
+        }
+        return KeyPathResolver.resolveKeyPath(data, key);
+    }
+
+    /**
      * Verify that Vault rejects the TLS handshake when a client certificate signed by a different CA
      * is presented. The server requires mutual TLS and the client cert CA is not in {@code tls_client_ca_file}.
      */
@@ -90,7 +108,8 @@ public class VaultConnectorMutualTlsTestCase {
 
             VaultConnector connector = new VaultConnector(
                     vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", wrongClientConfig, true);
-            assertThrows(VaultException.class, connector::configure);
+            connector.configure();
+            assertThrows(CredentialStoreException.class, () -> getSecret(connector, "secret/testing1", "top_secret"));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }
@@ -109,7 +128,8 @@ public class VaultConnectorMutualTlsTestCase {
 
         VaultConnector connector = new VaultConnector(
                 vaultTestContainer.composeHttpsHostAddress(), "", "secret/testing1", trustOnlyConfig, true);
-        assertThrows(VaultException.class, connector::configure);
+        connector.configure();
+        assertThrows(CredentialStoreException.class, () -> getSecret(connector, "secret/testing1", "top_secret"));
     }
 
     /**
@@ -137,7 +157,8 @@ public class VaultConnectorMutualTlsTestCase {
             SslConfig sslConfig = new SslConfig().verify(true).build();
             VaultConnector connector = new VaultConnector(
                     vaultTestContainer.composeHttpsHostAddress(), "", null, sslConfig, true, wrongSslContext);
-            assertThrows(VaultException.class, connector::configure);
+            connector.configure();
+            assertThrows(CredentialStoreException.class, () -> getSecret(connector, "secret/testing1", "top_secret"));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }

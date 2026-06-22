@@ -4,21 +4,22 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.smallrye.certs.CertificateFiles;
-import io.smallrye.certs.CertificateGenerator;
-import io.smallrye.certs.CertificateRequest;
-import io.smallrye.certs.Format;
-import io.smallrye.certs.PemCertificateFiles;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
 import org.jboss.logging.Logger;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.MountableFile;
 import org.testcontainers.vault.VaultContainer;
 import org.wildfly.security.hashicorp.vault.logging.JbossLoggingLogConsumer;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
+import io.smallrye.certs.CertificateFiles;
+import io.smallrye.certs.CertificateGenerator;
+import io.smallrye.certs.CertificateRequest;
+import io.smallrye.certs.Format;
+import io.smallrye.certs.PemCertificateFiles;
 
 /**
  * Represents a {@link VaultContainer} running with a secured interface.
@@ -229,5 +230,11 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
         VaultTestUtils.cleanupDir(this.generatedClientCertificatesDir);
         VaultTestUtils.cleanupDir(this.mountedVaultCertsDir);
         VaultTestUtils.cleanupDir(this.mountedVaultConfigDir);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("VaultContainerHttps{image=%s, httpsPort=%d, certsDir=%s, configDir=%s}",
+                getDockerImageName(), HTTPS_PORT, mountedVaultCertsDir, mountedVaultConfigDir);
     }
 }

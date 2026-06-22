@@ -8,6 +8,7 @@ package org.wildfly.security.hashicorp.vault._private;
 import static org.jboss.logging.Logger.Level.DEBUG;
 import static org.jboss.logging.Logger.Level.ERROR;
 import static org.jboss.logging.Logger.Level.TRACE;
+import static org.jboss.logging.Logger.Level.WARN;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -143,43 +144,43 @@ public interface HashiCorpVaultLogger extends BasicLogger {
     @Message(id = 33, value = "Vault removed key %s from path %s successfully")
     void vaultRemovedKeyFromPath(String key, String path);
 
-    // --- Vault connector: VaultException message text (driver has no String+Throwable constructor) ---
+    // --- Vault connector: Exception methods (return proper exception types, not third-party VaultException) ---
 
     @Message(id = 34, value = "All login strategies failed")
-    String vaultAllLoginStrategiesFailed();
+    CredentialStoreException vaultAllLoginStrategiesFailed();
 
-    @Message(id = 35, value = "Path cannot be null or empty")
-    String vaultPathCannotBeNullOrEmpty();
+    @Message(id = 35, value = "Alias cannot be null")
+    CredentialStoreException vaultAliasCannotBeNull();
 
     @Message(id = 36, value = "Key cannot be null or empty")
-    String vaultKeyCannotBeNullOrEmpty();
+    CredentialStoreException vaultKeyCannotBeNullOrEmpty();
 
     @Message(id = 37, value = "Value cannot be null")
-    String vaultValueCannotBeNull();
+    CredentialStoreException vaultValueCannotBeNull();
 
     @Message(id = 38, value = "Forbidden to retrieve secret at path: %s")
-    String vaultForbiddenToRetrieveSecretAtPath(String path);
+    CredentialStoreException vaultForbiddenToRetrieveSecretAtPath(String path);
 
     @Message(id = 39, value = "Failed to retrieve secret from path: %s/%s (HTTP %d)")
-    String vaultFailedToRetrieveSecretHttp(String path, String key, int responseStatus);
+    CredentialStoreException vaultFailedToRetrieveSecretHttp(String path, String key, int responseStatus);
 
     @Message(id = 40, value = "Forbidden to store secret at path: %s")
-    String vaultForbiddenToStoreSecretAtPath(String path);
+    CredentialStoreException vaultForbiddenToStoreSecretAtPath(String path);
 
     @Message(id = 41, value = "Failed to store secret at path: %s/%s (HTTP %d)")
-    String vaultFailedToStoreSecretHttp(String path, String key, int responseStatus);
+    CredentialStoreException vaultFailedToStoreSecretHttp(String path, String key, int responseStatus);
 
     @Message(id = 42, value = "Forbidden to delete secret at path: %s")
-    String vaultForbiddenToDeleteSecretAtPath(String path);
+    CredentialStoreException vaultForbiddenToDeleteSecretAtPath(String path);
 
     @Message(id = 43, value = "Failed to delete secret at path: %s (HTTP %d)")
-    String vaultFailedToDeleteSecretHttp(String path, int deleteStatus);
+    CredentialStoreException vaultFailedToDeleteSecretHttp(String path, int deleteStatus);
 
     @Message(id = 44, value = "Forbidden to update secret at path: %s")
-    String vaultForbiddenToUpdateSecretAtPath(String path);
+    CredentialStoreException vaultForbiddenToUpdateSecretAtPath(String path);
 
     @Message(id = 45, value = "Failed to update secret at path: %s after removing key %s (HTTP %d)")
-    String vaultFailedToUpdateSecretAfterRemoveKey(String path, String key, int writeStatus);
+    CredentialStoreException vaultFailedToUpdateSecretAfterRemoveKey(String path, String key, int writeStatus);
 
     @Message(id = 46, value = "Path does not exist or forbidden: \"%s\"")
     String vaultPathDoesNotExistOrForbidden(String path);
@@ -227,4 +228,72 @@ public interface HashiCorpVaultLogger extends BasicLogger {
 
     @Message(id = 60, value = "No authentication method configured: provide either a vault token (via credential-reference) or TLS client certificate authentication (via authentication-context)")
     CredentialStoreException noAuthenticationMethodConfigured();
+
+    // --- Alias parsing errors ---
+
+    @Message(id = 61, value = "Alias cannot be null or empty")
+    CredentialStoreException aliasCannotBeNullOrEmpty();
+
+    @Message(id = 62, value = "Invalid engine specification: missing delimiter after 'engine=' in alias: %s")
+    CredentialStoreException invalidEngineSpecificationMissingDelimiter(String alias);
+
+    @Message(id = 63, value = "Engine type cannot be empty in alias: %s")
+    CredentialStoreException engineTypeCannotBeEmpty(String alias);
+
+    @Message(id = 64, value = "Missing '#' delimiter after mount path in alias: %s")
+    CredentialStoreException missingHashDelimiterAfterMountPath(String alias);
+
+    @Message(id = 65, value = "Mount path cannot be empty after '@' in alias: %s")
+    CredentialStoreException mountPathCannotBeEmpty(String alias);
+
+    @Message(id = 66, value = "Secret path must start with '#' in alias: %s")
+    CredentialStoreException secretPathMustStartWithHash(String alias);
+
+    @Message(id = 67, value = "Missing '?' delimiter before key path in alias: %s")
+    CredentialStoreException missingQuestionDelimiterBeforeKeyPath(String alias);
+
+    @Message(id = 68, value = "Secret path cannot be empty in alias: %s")
+    CredentialStoreException secretPathCannotBeEmpty(String alias);
+
+    @Message(id = 69, value = "Key path cannot be empty in alias: %s")
+    CredentialStoreException keyPathCannotBeEmpty(String alias);
+
+    @Message(id = 70, value = "Key path cannot be null or empty")
+    CredentialStoreException keyPathCannotBeNullOrEmpty();
+
+    @Message(id = 71, value = "Key path contains empty segment: %s")
+    CredentialStoreException keyPathContainsEmptySegment(String keyPath);
+
+    // --- Legacy format support ---
+
+    @LogMessage(level = Logger.Level.WARN)
+    @Message(id = 72, value = "Legacy alias format detected: '%s'. This format is deprecated and will be removed in a future release. Please migrate to the new format: '%s'")
+    void legacyAliasFormatDeprecated(String legacyAlias, String newFormatEquivalent);
+
+    @Message(id = 73, value = "Legacy alias format '%s' is not supported. Use new format: '%s'")
+    CredentialStoreException legacyAliasFormatNotSupported(String legacyAlias, String newFormatEquivalent);
+
+    @Message(id = 74, value = "Invalid alias format: %s. Expected format: [engine=TYPE][@mount-path][#]secret-path?key-path (# is optional when no engine= or @ prefix)")
+    CredentialStoreException invalidAliasFormat(String alias);
+
+    @Message(id = 75, value = "Invalid engine type '%s'. Valid values are: KVv1, KVv2")
+    CredentialStoreException invalidEngineType(String engineType);
+
+    @Message(id = 76, value = "Invalid default-engine-type configuration '%s'. Valid values are: KVv1, KVv2")
+    CredentialStoreException invalidDefaultEngineType(String engineType);
+
+    // --- Deep nesting warning ---
+
+    @LogMessage(level = WARN)
+    @Message(id = 77, value = "Key path '%s' has deep nesting (%d levels). Consider flattening the JSON structure for better performance and maintainability.")
+    void deepKeyPathNesting(String keyPath, int nestingLevel);
+
+    @Message(id = 78, value = "Could not list secrets at path '%s' (HTTP status: %d)")
+    CredentialStoreException couldNotListSecretsAtPath(String path, int httpStatus);
+
+    @Message(id = 79, value = "Could not list secrets at path '%s'")
+    CredentialStoreException couldNotListSecretsAtPath(String path, @Cause Exception e);
+
+    @Message(id = 80, value = "Legacy path format '%s' is not supported when supportLegacyAliasFormat is disabled. Use '@mount#secretpath' or '#secretpath' format instead.")
+    CredentialStoreException legacyPathFormatNotSupported(String path);
 }

@@ -4,25 +4,27 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.github.jopenlibs.vault.SslConfig;
-import io.github.jopenlibs.vault.VaultException;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
-import io.smallrye.certs.CertificateFiles;
-import io.smallrye.certs.CertificateGenerator;
-import io.smallrye.certs.CertificateRequest;
-import io.smallrye.certs.Format;
-import io.smallrye.certs.PemCertificateFiles;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.wildfly.security.credential.store.CredentialStoreException;
+
+import io.github.jopenlibs.vault.SslConfig;
+import io.github.jopenlibs.vault.VaultException;
+import io.smallrye.certs.CertificateFiles;
+import io.smallrye.certs.CertificateGenerator;
+import io.smallrye.certs.CertificateRequest;
+import io.smallrye.certs.Format;
+import io.smallrye.certs.PemCertificateFiles;
 
 /**
  * Dedicated tests for Vault listening on HTTPS interface
@@ -59,15 +61,49 @@ public class VaultConnectorHttpsTestCase {
                 .build();
     }
 
+    /**
+     * Helper method to get a secret value using the new alias-based API.
+     */
+    private String getSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        Map<String, Object> data = connector.getSecretData(alias);
+        if (data == null) {
+            return null;
+        }
+        return KeyPathResolver.resolveKeyPath(data, key);
+    }
+
+    /**
+     * Helper method to put a secret value using the new alias-based API.
+     */
+    private void putSecret(VaultConnector connector, String path, String key, String value) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        connector.putSecretData(alias, value);
+    }
+
+    /**
+     * Helper method to remove a secret value using the new alias-based API.
+     */
+    private void removeSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        connector.removeSecretData(alias);
+    }
+
     @Test
     public void testGetSecretFromVaultService() throws Exception {
         // setup test container with vault
         startVaultTestContainer();
 
-        // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", httpsSslConfig, true);
+        // Test vault service - namespace is null for default namespace
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", null, httpsSslConfig, true);
         vaultService.configure();
-        assertEquals("password123", vaultService.getSecret("secret/testing1", "top_secret"));
+        assertEquals("password123", getSecret(vaultService, "secret/testing1", "top_secret"));
     }
 
     @Test
@@ -75,12 +111,12 @@ public class VaultConnectorHttpsTestCase {
         // setup test container with vault
         startVaultTestContainer();
 
-        // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", httpsSslConfig, true);
+        // Test vault service - namespace is null for default namespace
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", null, httpsSslConfig, true);
         vaultService.configure();
-        vaultService.putSecret("secret/testing1", "top_secret2", "password2");
+        putSecret(vaultService, "secret/testing1", "top_secret2", "password2");
 
-        assertEquals("password2", vaultService.getSecret("secret/testing1", "top_secret2"));
+        assertEquals("password2", getSecret(vaultService, "secret/testing1", "top_secret2"));
     }
 
     @Test
@@ -88,18 +124,18 @@ public class VaultConnectorHttpsTestCase {
         // setup test container with vault
         startVaultTestContainer();
 
-        // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", httpsSslConfig, true);
+        // Test vault service - namespace is null for default namespace
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", null, httpsSslConfig, true);
         vaultService.configure();
 
         // First verify the secret exists
-        String originalSecret = vaultService.getSecret("secret/testing1", "top_secret");
+        String originalSecret = getSecret(vaultService, "secret/testing1", "top_secret");
         assertEquals("password123", originalSecret);
 
         // Remove the secret
-        vaultService.removeSecret("secret/testing1", "top_secret");
+        removeSecret(vaultService, "secret/testing1", "top_secret");
 
-        assertNull(vaultService.getSecret("secret/testing1", "top_secret"));
+        assertNull(getSecret(vaultService, "secret/testing1", "top_secret"));
         // If we get here, the test should fail because exception was expected
 
     }
@@ -117,10 +153,11 @@ public class VaultConnectorHttpsTestCase {
                 );
         vaultTestContainer.start();
 
-        // Test vault service with incorrect token - this should throw VaultException during configure()
+        // Test vault service with incorrect token - this should throw CredentialStoreException when attempting to use it
         VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "incorrect-token", "admin", httpsSslConfig, true);
-        assertThrows(VaultException.class, vaultService::configure,
-                "VaultException should be thrown due to authentication failure");
+        vaultService.configure();
+        assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"),
+                "CredentialStoreException should be thrown due to authentication failure");
     }
 
     @Test
@@ -128,10 +165,10 @@ public class VaultConnectorHttpsTestCase {
         // setup and start test container with vault
         startVaultTestContainer();
 
-        // Test vault service
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", "admin", httpsSslConfig, true);
+        // Test vault service - namespace is null for default namespace
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), "myroot", null, httpsSslConfig, true);
         vaultService.configure();
-        vaultService.removeSecret("secret/testing1", "top_secret");
+        removeSecret(vaultService, "secret/testing1", "top_secret");
     }
 
     /**
@@ -160,7 +197,8 @@ public class VaultConnectorHttpsTestCase {
 
             VaultConnector vaultService = new VaultConnector(
                     vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", wrongTrustConfig, true);
-            assertThrows(VaultException.class, vaultService::configure);
+            vaultService.configure();
+            assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"));
         } finally {
             VaultTestUtils.cleanupDir(wrongCertDir);
         }
@@ -177,6 +215,7 @@ public class VaultConnectorHttpsTestCase {
         SslConfig noTrustConfig = new SslConfig().verify(true).build();
         VaultConnector vaultService = new VaultConnector(
                 vaultTestContainer.composeHttpsHostAddress(), "myroot", "secret/testing1", noTrustConfig, true);
-        assertThrows(VaultException.class, vaultService::configure);
+        vaultService.configure();
+        assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"));
     }
 }

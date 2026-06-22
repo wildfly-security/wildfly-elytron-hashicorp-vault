@@ -4,35 +4,69 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.github.jopenlibs.vault.SslConfig;
-import io.github.jopenlibs.vault.VaultException;
-import org.wildfly.security.credential.Credential;
-import org.wildfly.security.credential.PasswordCredential;
-import org.wildfly.security.credential.source.CredentialSource;
-import org.wildfly.security.credential.store.CredentialStore;
-import org.wildfly.security.credential.store.CredentialStoreExtension;
-import org.wildfly.security.credential.store.CredentialStoreException;
-import org.wildfly.security.credential.store.CredentialStoreSpi;
-import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
-import org.wildfly.security.password.interfaces.ClearPassword;
+import static org.wildfly.security.credential.store._private.ElytronMessages.log;
+import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
 
-import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.security.KeyStore;
 import java.security.Provider;
 import java.security.spec.AlgorithmParameterSpec;
-import java.util.HashSet;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.wildfly.security.credential.store._private.ElytronMessages.log;
-import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
+import javax.net.ssl.SSLContext;
+
+import org.wildfly.security.credential.Credential;
+import org.wildfly.security.credential.PasswordCredential;
+import org.wildfly.security.credential.store.CredentialStore;
+import org.wildfly.security.credential.store.CredentialStoreException;
+import org.wildfly.security.credential.store.CredentialStoreExtension;
+import org.wildfly.security.credential.store.CredentialStoreSpi;
+import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
+import org.wildfly.security.password.interfaces.ClearPassword;
+
+import io.github.jopenlibs.vault.SslConfig;
 
 /**
- * Credential store backed by Hashicorp Vault
+ * Credential store backed by HashiCorp Vault.
+ *
+ * <p>This credential store integrates with HashiCorp Vault to securely retrieve credentials.
+ * It supports the new structured alias format with nested JSON path traversal, as well as
+ * optional backward compatibility with the legacy format.
+ *
+ * <h2>Alias Format</h2>
+ * <p>The new alias format is:
+ * <pre>{@code [engine=TYPE][@mount-path][#]secret-path?key-path}</pre>
+ *
+ * <p>Examples:
+ * <ul>
+ *   <li>{@code myapp/database?password} - Simple key</li>
+ *   <li>{@code myapp/config?database/host} - Nested JSON path</li>
+ *   <li>{@code engine=KVv1#old-app/config?api_key} - Explicit engine type</li>
+ *   <li>{@code @prod/secrets#myapp/db?password} - Custom mount path</li>
+ * </ul>
+ *
+ * <h2>Configuration Parameters</h2>
+ * <ul>
+ *   <li>{@code host-address} (required) - Vault server URL</li>
+ *   <li>{@code namespace} (optional) - Vault namespace (Enterprise)</li>
+ *   <li>{@code trust-store-path} (optional) - Path to trust store for TLS</li>
+ *   <li>{@code key-store-path} (optional) - Path to key store for mutual TLS</li>
+ *   <li>{@code key-store-pass} (optional) - Key store password</li>
+ *   <li>{@code trust-store-pass} (optional) - Trust store password</li>
+ *   <li>{@code support-legacy-alias-format} (optional) - Enable legacy format support (default: false)</li>
+ *   <li>{@code default-engine-type} (optional) - Default engine type (default: KVv2)</li>
+ *   <li>{@code default-mount-path} (optional) - Default mount path (default: secret)</li>
+ * </ul>
+ *
+ * <p>For complete documentation, see the project documentation in the {@code docs/} directory.
+ *
+ * @see VaultAlias
+ * @see KeyPathResolver
  */
 public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
@@ -42,7 +76,6 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     private static final int DEFAULT_CREDENTIAL_CACHE_MAX_SIZE = 500;
     private static List<Class<? extends CredentialStoreExtension>> SUPPORTED_EXTENSION_TYPES =
             List.of(HashicorpVaultCredentialStoreExtension.class);
-
     String hostAddress;
     String namespace;
     CredentialStore.ProtectionParameter protectionParameter;
@@ -57,13 +90,22 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     /** In-memory LRU cache of retrieved credentials, keyed by credential alias (e.g. "path.key"). */
     private Map<String, Credential> credentialCache;
 
+    /** Whether to support legacy alias format (secret-path.key). Defaults to false. */
+    private boolean supportLegacyAliasFormat = false;
+
+    /** Default engine type to use when not specified in alias. */
+    private String defaultEngineType = "KVv2";
+
+    /** Default mount path to use when not specified in alias. */
+    private String defaultMountPath = "secret";
+
 
     @Override
     public void initialize(Map<String, String> attributes, CredentialStore.ProtectionParameter protectionParameter, Provider[] providers) throws CredentialStoreException {
         if (attributes == null) {
             throw ROOT_LOGGER.attributesCannotBeNull();
         }
-        
+
         // Check required attributes
         this.hostAddress = attributes.get("host-address");
         if (this.hostAddress == null || this.hostAddress.trim().isEmpty()) {
@@ -85,10 +127,27 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (attributes.get("trust-store-pass") != null) {
             this.trustStorePass = attributes.get("trust-store-pass");
         }
-        
+
         this.namespace = attributes.get("namespace");
         this.protectionParameter = protectionParameter;
         this.providers = providers;
+
+        // Parse new configuration parameters
+        if (attributes.get("support-legacy-alias-format") != null) {
+            this.supportLegacyAliasFormat = Boolean.parseBoolean(attributes.get("support-legacy-alias-format"));
+        }
+
+        if (attributes.get("default-engine-type") != null) {
+            this.defaultEngineType = attributes.get("default-engine-type");
+            // Validate engine type
+            if (!this.defaultEngineType.equals("KVv1") && !this.defaultEngineType.equals("KVv2")) {
+                throw ROOT_LOGGER.invalidDefaultEngineType(this.defaultEngineType);
+            }
+        }
+
+        if (attributes.get("default-mount-path") != null) {
+            this.defaultMountPath = attributes.get("default-mount-path");
+        }
 
         this.credentialCache = Collections.synchronizedMap(new LinkedHashMap<String, Credential>(16, 0.75f, true) {
             @Override
@@ -108,14 +167,14 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             }
 
             SslConfig sslConfig = new SslConfig().verify(true);
-            
+
             if (this.keyStorePath != null && !this.keyStorePath.trim().isEmpty()) {
                 try {
                     KeyStore keyStore = KeyStore.getInstance("JKS");
                     try (java.io.FileInputStream fis = new java.io.FileInputStream(this.keyStorePath)) {
                         keyStore.load(fis, this.keyStorePass != null ? this.keyStorePass.toCharArray() : null);
                     }
-                    
+
                     if (this.keyStorePass != null) {
                         sslConfig.keyStore(keyStore, this.keyStorePass);
                     } else {
@@ -125,7 +184,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                     throw ROOT_LOGGER.failedToLoadKeyStore(e.getMessage(), e);
                 }
             }
-            
+
             if (this.trustStorePath != null && !this.trustStorePath.trim().isEmpty()) {
                 try {
                     KeyStore trustStore = KeyStore.getInstance("JKS");
@@ -144,12 +203,10 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
             vaultConnector = new VaultConnector(this.hostAddress, token, this.namespace, sslConfig, true, sslContext);
             vaultConnector.configure();
-            
+
             initialized = true;
         } catch (IOException e) {
             throw ROOT_LOGGER.failedToInitializeVaultCredentialStore(e);
-        } catch (VaultException e) {
-            throw ROOT_LOGGER.failedToConfigureVaultConnection(e);
         }
     }
 
@@ -173,22 +230,16 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (credential == null) {
             throw ROOT_LOGGER.credentialCannotBeNull();
         }
-        
-        // Parse credentialAlias in format "path.key"
-        String[] aliasSplit = credentialAlias.split("\\.");
-        if (aliasSplit.length != 2) {
-            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
-        }
-        
+
+        VaultAlias alias = parseAlias(credentialAlias);
+
         try {
             final char[] chars = credential.castAndApply(PasswordCredential.class, c -> c.getPassword().castAndApply(ClearPassword.class, ClearPassword::getPassword));
             if (chars == null) {
                 throw ROOT_LOGGER.failedToExtractPasswordFromCredential();
             }
-            vaultConnector.putSecret(aliasSplit[0], aliasSplit[1], new String(chars));
+            vaultConnector.putSecretData(alias, new String(chars));
             putInCredentialCache(credentialAlias, credential);
-        } catch (VaultException e) {
-            throw ROOT_LOGGER.failedToStoreCredentialInVault(e);
         } catch (ClassCastException e) {
             throw ROOT_LOGGER.onlyPasswordCredentialWithClearPasswordSupported(e);
         }
@@ -202,13 +253,8 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (credentialAlias == null || credentialAlias.trim().isEmpty()) {
             throw ROOT_LOGGER.credentialAliasRequired();
         }
-        
-        // Parse credentialAlias in format "path.key"
-        String[] aliasSplit = credentialAlias.split("\\.");
-        if (aliasSplit.length != 2) {
-            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
-        }
 
+        // Check cache first
         Credential cached;
         synchronized (credentialCache) {
             cached = credentialCache.get(credentialAlias);
@@ -216,17 +262,26 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (credentialType.isInstance(cached)) {
             return credentialType.cast(cached);
         }
-        
+
+        VaultAlias alias = parseAlias(credentialAlias);
+
         try {
-            CredentialSource credentialSource = new VaultCredentialSource(vaultConnector, aliasSplit[0], aliasSplit[1]);
-            PasswordCredential credential = credentialSource.getCredential(PasswordCredential.class, ClearPassword.ALGORITHM_CLEAR, null);
-            if (credential == null) {
-                return null; // Secret not found or key not found in secret
+            // Retrieve full secret data from Vault
+            Map<String, Object> secretData = vaultConnector.getSecretData(alias);
+            if (secretData == null) {
+                return null; // Secret not found
             }
+
+            // Resolve the specific value using key path
+            String value = KeyPathResolver.resolveKeyPath(secretData, alias.getKeyPath());
+            if (value == null) {
+                return null; // Key not found in secret
+            }
+
+            // Create credential from the value
+            PasswordCredential credential = new PasswordCredential(ClearPassword.createRaw(ClearPassword.ALGORITHM_CLEAR, value.toCharArray()));
             putInCredentialCache(credentialAlias, credential);
             return credentialType.cast(credential);
-        } catch (IOException e) {
-            throw ROOT_LOGGER.failedToRetrieveCredentialFromVault(e);
         } catch (ClassCastException e) {
             throw ROOT_LOGGER.unsupportedCredentialType(credentialType.getSimpleName(), e);
         }
@@ -240,22 +295,32 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (credentialAlias == null || credentialAlias.trim().isEmpty()) {
             throw ROOT_LOGGER.credentialAliasRequired();
         }
-        
-        // Parse credentialAlias in format "path.key"
-        String[] aliasSplit = credentialAlias.split("\\.");
-        if (aliasSplit.length != 2) {
-            throw ROOT_LOGGER.credentialAliasInvalidFormat(credentialAlias);
+
+        VaultAlias alias = parseAlias(credentialAlias);
+
+        vaultConnector.removeSecretData(alias);
+        synchronized (credentialCache) {
+            // Remove from cache - just this specific alias
+            // Note: If the removal empties the secret, other keys at same path are also removed from Vault
+            credentialCache.remove(credentialAlias);
         }
-        
-        try {
-            vaultConnector.removeSecret(aliasSplit[0], aliasSplit[1]);
-            synchronized (credentialCache) {
-                // we need to remove whole path because that is how the vault's removeSecret operation works
-                credentialCache.keySet().removeIf(k -> k.equals(credentialAlias) || k.startsWith(aliasSplit[0] + "."));
-            }
-        } catch (VaultException e) {
-            throw ROOT_LOGGER.failedToRemoveCredentialFromVault(e);
-        }
+    }
+
+    /**
+     * Parse a credential alias string into a VaultAlias object.
+     * Supports both new alias format and legacy format (if enabled).
+     *
+     * @param credentialAlias the alias string to parse
+     * @return parsed VaultAlias object
+     * @throws CredentialStoreException if parsing fails
+     */
+    private VaultAlias parseAlias(String credentialAlias) throws CredentialStoreException {
+        return VaultAlias.parse(
+            credentialAlias,
+            this.defaultEngineType,
+            this.defaultMountPath,
+            this.supportLegacyAliasFormat
+        );
     }
 
     private void putInCredentialCache(String alias, Credential credential) {
@@ -303,11 +368,30 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     /**
      * Get aliases from a specific path in Vault with optional recursive traversal.
+     * <p>
+     * Path format depends on the {@code supportLegacyAliasFormat} configuration:
+     * <ul>
+     *   <li><b>New format</b> (always supported):
+     *     <ul>
+     *       <li>{@code @mount#secretpath} - explicit mount and secret path</li>
+     *       <li>{@code #secretpath} - default mount with secret path</li>
+     *       <li>{@code secretpath} - default mount with secret path (# is optional)</li>
+     *       <li>{@code /} or {@code ""} - root of default mount</li>
+     *       <li>{@code @mount#} or {@code @mount#/} - root of explicit mount</li>
+     *     </ul>
+     *   </li>
+     *   <li><b>Legacy format</b> (only when {@code supportLegacyAliasFormat=true}):
+     *     <ul>
+     *       <li>{@code mount/secretpath} - mount point and secret path separated by first /</li>
+     *       <li>{@code mount/} - root of mount point</li>
+     *     </ul>
+     *   </li>
+     * </ul>
      *
      * @param path the Vault path to start listing from. If null or empty, throw exception
      * @param recursive if true, traverse subpaths; if false, only list aliases at the specified path
      * @return set of aliases in format "path.key", containing at most 10,000 aliases
-     * @throws CredentialStoreException if listing aliases fails
+     * @throws CredentialStoreException if listing aliases fails or if legacy format is used when not supported
      */
     public Set<String> getAliases(String path, boolean recursive) throws CredentialStoreException {
         if (!initialized) {
@@ -321,13 +405,32 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     /**
      * Get aliases from a specific path in Vault with optional recursive traversal.
+     * <p>
+     * Path format depends on the {@code supportLegacyAliasFormat} configuration:
+     * <ul>
+     *   <li><b>New format</b> (always supported):
+     *     <ul>
+     *       <li>{@code @mount#secretpath} - explicit mount and secret path</li>
+     *       <li>{@code #secretpath} - default mount with secret path</li>
+     *       <li>{@code secretpath} - default mount with secret path (# is optional)</li>
+     *       <li>{@code /} or {@code ""} - root of default mount</li>
+     *       <li>{@code @mount#} or {@code @mount#/} - root of explicit mount</li>
+     *     </ul>
+     *   </li>
+     *   <li><b>Legacy format</b> (only when {@code supportLegacyAliasFormat=true}):
+     *     <ul>
+     *       <li>{@code mount/secretpath} - mount point and secret path separated by first /</li>
+     *       <li>{@code mount/} - root of mount point</li>
+     *     </ul>
+     *   </li>
+     * </ul>
      *
      * @param path the Vault path to start listing from. If null or empty, throw exception
      * @param recursive if true, traverse subpaths; if false, only list aliases at the specified path
      * @param recursiveDepth the maximum depth to traverse if recursive is true. 0 means only the specified path,
      *                       1 means one level deep, etc. Ignored if recursive is false.
      * @return set of aliases in format "path.key", containing at most 10,000 aliases
-     * @throws CredentialStoreException if listing aliases fails
+     * @throws CredentialStoreException if listing aliases fails or if legacy format is used when not supported
      */
     public Set<String> getAliases(String path, boolean recursive, int recursiveDepth) throws CredentialStoreException {
         if (!initialized) {
@@ -339,7 +442,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (recursiveDepth < 0) {
             throw ROOT_LOGGER.recursiveDepthMustBeNonNegative(recursiveDepth);
         }
-        return collectAliases(normalizePath(path), recursive, recursiveDepth);
+        return collectAliases(path, recursive, recursiveDepth);
     }
 
     /**
@@ -366,7 +469,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (maxNumberOfAliases <= 0) {
             throw ROOT_LOGGER.maxNumberOfAliasesMustBePositive(maxNumberOfAliases);
         }
-        return collectAliases(normalizePath(path), recursive, recursiveDepth, maxNumberOfAliases);
+        return collectAliases(path, recursive, recursiveDepth, maxNumberOfAliases);
     }
 
     private final HashicorpVaultCredentialStoreExtension credentialStoreExtension = new HashicorpVaultCredentialStoreExtension() {
@@ -420,61 +523,110 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         return aliases;
     }
 
-    // Keep an eye on https://github.com/hashicorp/vault/issues/5275 and remove this logic once hashicorp vault provides this operation
+    /**
+     * Recursively collect aliases from Vault using the new alias format.
+     *
+     * <p>This implementation:
+     * <ul>
+     *   <li>Parses the input path to extract engine type, mount path, and secret path</li>
+     *   <li>Lists secrets at the current path</li>
+     *   <li>For each secret, gets all keys and creates aliases in new format</li>
+     *   <li>Recursively traverses subdirectories if enabled</li>
+     * </ul>
+     *
+     * <p>Supported path formats:
+     * <ul>
+     *   <li>{@code engine=TYPE@mount#secretpath} - Full specification with engine type</li>
+     *   <li>{@code @mount#secretpath} - Explicit mount with default engine type</li>
+     *   <li>{@code #secretpath} - Default mount and engine type</li>
+     *   <li>{@code secretpath} - Minimal format (# is optional)</li>
+     *   <li>{@code mount/secretpath} - Legacy format (only when {@code supportLegacyAliasFormat=true})</li>
+     * </ul>
+     *
+     * @param path the path to list in any supported format
+     * @param aliases the set to collect aliases into
+     * @param recursive whether to recurse into subdirectories
+     * @param maxDepth maximum recursion depth
+     * @param currentDepth current recursion depth
+     * @param maxNumberOfAliases maximum number of aliases to collect
+     * @throws CredentialStoreException if listing fails or path format is invalid
+     */
     private void collectAliasesRecursive(String path, Set<String> aliases, boolean recursive, int maxDepth, int currentDepth, int maxNumberOfAliases) throws CredentialStoreException {
         if (aliases.size() >= maxNumberOfAliases) {
             return;
         }
 
+        // Parse the path using VaultPath to extract mount and secret path
+        // This handles all formats: engine=TYPE@mount#secretpath, @mount#secretpath,
+        // #secretpath, secretpath, and legacy mount/secretpath (when enabled)
+        VaultPath vaultPath;
         try {
-            Set<String> keys = vaultConnector.getKeysForPath(path);
-            for (String key : keys) {
-                if (aliases.size() >= maxNumberOfAliases) {
-                    return;
-                }
-                aliases.add(path + "." + key);
-            }
-        } catch (VaultException e) {
-            if (e.getMessage() != null && e.getMessage().contains("Path does not exist")) {
-                // ignore because this path in the tree can be empty, but other paths not so continue traversal
-            } else {
-                throw ROOT_LOGGER.couldNotReadKeysFromPath(path, currentDepth, recursive, e.getMessage(), e);
-            }
+            vaultPath = VaultPath.parse(path != null ? path : "", defaultEngineType, defaultMountPath, supportLegacyAliasFormat);
+        } catch (CredentialStoreException e) {
+            // Invalid path format, cannot proceed
+            ROOT_LOGGER.tracef(e, "Failed to parse path '%s'", path);
+            return;
         }
 
-        if (recursive && currentDepth < maxDepth && aliases.size() < maxNumberOfAliases) {
+        String mountPath = vaultPath.getMountPath();
+        String secretPath = vaultPath.getSecretPath();
+        String engineType = vaultPath.getEngineType();
+
+        // First, try to get keys for the secret at this exact path
+        // This handles the case where the path itself is a secret (e.g., "app1")
+        try {
+            VaultPath secretVaultPath = VaultPath.create(engineType, mountPath, secretPath);
+            List<String> keys = vaultConnector.getKeysForSecret(secretVaultPath);
+            if (keys != null && !keys.isEmpty()) {
+                for (String key : keys) {
+                    if (aliases.size() >= maxNumberOfAliases) return;
+                    aliases.add("#" + secretPath + "?" + key);
+                }
+            }
+        } catch (CredentialStoreException e) {
+            // No secret at this path, continue
+            ROOT_LOGGER.tracef(e, "No secret found at path '%s', continuing to check subdirectories", secretPath);
+        }
+
+        // If recursive and we haven't exceeded depth, list subdirectories
+        if (recursive && currentDepth < maxDepth) {
             try {
-                Set<String> items = vaultConnector.listAllItemsAtPath(path);
-                if (items.isEmpty()) {
-                    return;
-                }
-                for (String item : items) {
-                    if (aliases.size() >= maxNumberOfAliases) {
-                        return;
-                    }
-                    String fullItemPath = normalizePath(path) + "/" + item;
-                    boolean isSubpath = item.endsWith("/");
-                    if (!isSubpath) {
-                        try {
-                            Set<String> keys = vaultConnector.getKeysForPath(fullItemPath);
-                            for (String key : keys) {
-                                if (aliases.size() >= maxNumberOfAliases) {
-                                    return;
+                // List items under this path
+                List<String> items = vaultConnector.listSecretsAtPath(mountPath, secretPath, defaultEngineType);
+
+                if (items != null && !items.isEmpty()) {
+                    // Process items from LIST
+                    for (String item : items) {
+                        if (aliases.size() >= maxNumberOfAliases) return;
+
+                        if (item.endsWith("/")) {
+                            // Subdirectory - recurse into it
+                            String subdirName = item.substring(0, item.length() - 1);
+                            String fullPath = secretPath.isEmpty() ? subdirName : secretPath + "/" + subdirName;
+                            collectAliasesRecursive("@" + mountPath + "#" + fullPath, aliases, recursive, maxDepth, currentDepth + 1, maxNumberOfAliases);
+                        } else {
+                            // Secret - get its keys
+                            String fullPath = secretPath.isEmpty() ? item : secretPath + "/" + item;
+                            try {
+                                VaultPath childVaultPath = VaultPath.create(engineType, mountPath, fullPath);
+                                List<String> keys = vaultConnector.getKeysForSecret(childVaultPath);
+                                if (keys != null) {
+                                    for (String key : keys) {
+                                        if (aliases.size() >= maxNumberOfAliases) return;
+                                        aliases.add("#" + fullPath + "?" + key);
+                                    }
                                 }
-                                aliases.add(fullItemPath + "." + key);
+                            } catch (CredentialStoreException e) {
+                                // Could not get keys for this secret, continue
+                                ROOT_LOGGER.tracef(e, "Could not read secret at path '%s', skipping", fullPath);
                             }
-                        } catch (VaultException e) {
-                            // Path doesn't have keys or doesn't exist - continue with other paths
                         }
-                    } else {
-                        collectAliasesRecursive(fullItemPath, aliases, recursive, maxDepth, currentDepth + 1, maxNumberOfAliases);
                     }
                 }
-            } catch (VaultException e) {
-                String errorMsg = e.getMessage();
-                if (errorMsg != null && errorMsg.contains("403")) {
-                    throw ROOT_LOGGER.forbiddenToListSubpathsAtCredentialStorePath(path, e);
-                }
+            } catch (CredentialStoreException e) {
+                // Re-throw the exception - if recursive listing fails (e.g., due to permissions),
+                // the caller should be notified
+                throw e;
             }
         }
     }

@@ -4,25 +4,28 @@
  */
 package org.wildfly.security.hashicorp.vault;
 
-import io.github.jopenlibs.vault.SslConfig;
-import io.github.jopenlibs.vault.VaultException;
-import org.jose4j.lang.JoseException;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.wildfly.security.hashicorp.vault.auth.JwtAuthConfig;
-import org.wildfly.security.hashicorp.vault.auth.JwtGenerator;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.jose4j.lang.JoseException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.wildfly.security.credential.store.CredentialStoreException;
+import org.wildfly.security.hashicorp.vault.auth.JwtAuthConfig;
+import org.wildfly.security.hashicorp.vault.auth.JwtGenerator;
+
+import io.github.jopenlibs.vault.SslConfig;
+import io.github.jopenlibs.vault.VaultException;
 
 /**
  * Set of tests verifying functionality of VaultConnector when using TLS certificate authentication method
@@ -96,14 +99,38 @@ public class VaultConnectorJwtAuthTestCase {
     }
 
     /**
+     * Helper method to get a secret value using the new alias-based API.
+     */
+    private String getSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        Map<String, Object> data = connector.getSecretData(alias);
+        if (data == null) {
+            return null;
+        }
+        return KeyPathResolver.resolveKeyPath(data, key);
+    }
+
+    /**
+     * Helper method to remove a secret value using the new alias-based API.
+     */
+    private void removeSecret(VaultConnector connector, String path, String key) throws CredentialStoreException {
+        String secretPath = path.substring(path.indexOf('/') + 1);
+        String aliasString = "#" + secretPath + "?" + key;
+        VaultAlias alias = VaultAlias.parse(aliasString, "KVv2", "secret");
+        connector.removeSecretData(alias);
+    }
+
+    /**
      * Configure vault connector with proper HTTPS config and try to log in using valid JWT
      * Test will succeed wince everything is configured properly
      */
     @Test
-    public void testGetSecretFromVaultService() throws VaultException {
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), validJwtConfig, "secret/testing1", permissibleSslAuthConfig);
+    public void testGetSecretFromVaultService() throws Exception {
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), validJwtConfig, null, permissibleSslAuthConfig);
         vaultService.configure();
-        assertEquals("password123", vaultService.getSecret("secret/testing1", "top_secret"));
+        assertEquals("password123", getSecret(vaultService, "secret/testing1", "top_secret"));
     }
 
     /**
@@ -111,9 +138,10 @@ public class VaultConnectorJwtAuthTestCase {
      * Test will fail since the connector will try to use the JWT to authenticate.
      */
     @Test
-    public void testGetSecretFromVaultServiceInvalidJwtToken() {
-        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), new JwtConfig("someInvalidToken", ROLE_NAME, "jwt"), "secret/testing1", permissibleSslAuthConfig);
-        assertThrows(VaultException.class, vaultService::configure,
+    public void testGetSecretFromVaultServiceInvalidJwtToken() throws Exception {
+        VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), new JwtConfig("someInvalidToken", ROLE_NAME, "jwt"), null, permissibleSslAuthConfig);
+        vaultService.configure();
+        assertThrows(CredentialStoreException.class, () -> getSecret(vaultService, "secret/testing1", "top_secret"),
                 "Correct SSL HTTPS config was provided but JWT was invalid. This should fail.");
     }
 
@@ -123,16 +151,16 @@ public class VaultConnectorJwtAuthTestCase {
      * Test will succeed when the secret is obtained removed and obtained again.
      */
     @Test
-    public void testRemoveSecretFromVaultService() throws VaultException {
-        final VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), validJwtConfig, "secret/testing1", permissibleSslAuthConfig);
+    public void testRemoveSecretFromVaultService() throws Exception {
+        final VaultConnector vaultService = new VaultConnector(vaultTestContainer.composeHttpsHostAddress(), validJwtConfig, null, permissibleSslAuthConfig);
         vaultService.configure();
 
-        final String originalSecret = vaultService.getSecret("secret/testing1", "top_secret");
+        final String originalSecret = getSecret(vaultService, "secret/testing1", "top_secret");
         assertEquals("password123", originalSecret);
 
-        vaultService.removeSecret("secret/testing1", "top_secret");
+        removeSecret(vaultService, "secret/testing1", "top_secret");
 
-        assertNull(vaultService.getSecret("secret/testing1", "top_secret"));
+        assertNull(getSecret(vaultService, "secret/testing1", "top_secret"));
     }
 
     private static String keyToPem(String header, byte[] encoded) {
