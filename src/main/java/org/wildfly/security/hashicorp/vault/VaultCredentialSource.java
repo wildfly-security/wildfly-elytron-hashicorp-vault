@@ -181,7 +181,7 @@ public class VaultCredentialSource implements CredentialSource {
                     return null;
                 }
 
-                String password = KeyPathResolver.resolveKeyPath(secretData, alias.getKeyPath());
+                String password = VaultKeyPathOperations.resolveKeyPath(secretData, alias.getKeyPath());
                 if (password != null) {
                     PasswordFactory factory = PasswordFactory.getInstance(ClearPassword.ALGORITHM_CLEAR, ELYTRON_PASSWORD_PROVIDERS);
                     ClearPassword clearPassword = (ClearPassword) factory.generatePassword(

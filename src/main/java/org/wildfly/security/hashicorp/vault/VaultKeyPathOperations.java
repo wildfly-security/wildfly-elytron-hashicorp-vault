@@ -11,9 +11,16 @@ import java.util.Map;
 import org.wildfly.security.credential.store.CredentialStoreException;
 
 /**
- * Resolves key paths within Vault secret data.
+ * Utility class for performing key path operations on Vault secret data.
  *
- * <p>Supports two modes of key path resolution:
+ * <p>This private class provides three core operations for working with Vault secret data:
+ * <ul>
+ *   <li>{@link #resolveKeyPath(Map, String)} - Read: extracts values from secret data</li>
+ *   <li>{@link #setNestedValue(Map, String, String)} - Write: sets values in secret data</li>
+ *   <li>{@link #removeNestedValue(Map, String)} - Remove: removes values from secret data</li>
+ * </ul>
+ *
+ * <p><b>Operation Modes:</b> All three methods support two modes of key path resolution:
  * <ul>
  *   <li><b>Simple key lookup:</b> When the key path contains no {@code /} separator,
  *       performs a direct lookup in the data map. This supports keys with dots in their names.</li>
@@ -22,7 +29,7 @@ import org.wildfly.security.credential.store.CredentialStoreException;
  *       as part of the key name.</li>
  * </ul>
  *
- * <p>Examples:
+ * <p><b>Examples:</b>
  * <pre>
  * Map<String, Object> data = Map.of(
  *     "password", "secret123",
@@ -47,9 +54,17 @@ import org.wildfly.security.credential.store.CredentialStoreException;
  * resolveKeyPath(data, "database/host")                    → "prod.db.com"
  * resolveKeyPath(data, "database/credentials/pass")        → "secret"
  * resolveKeyPath(data, "my.app/config.key")                → "value123"  (dots in segment)
+ *
+ * // Write operations
+ * setNestedValue(data, "newKey", "value")                  // Simple set
+ * setNestedValue(data, "app/config/timeout", "30")         // Creates nested structure
+ *
+ * // Remove operations
+ * removeNestedValue(data, "password")                      // Remove simple key
+ * removeNestedValue(data, "database/credentials/pass")     // Remove nested value
  * </pre>
  */
-class KeyPathResolver {
+class VaultKeyPathOperations {
 
     /**
      * Extract value from Vault secret data using key path.

@@ -72,7 +72,7 @@ public class VaultConnectorHttpsTestCase {
         if (data == null) {
             return null;
         }
-        return KeyPathResolver.resolveKeyPath(data, key);
+        return VaultKeyPathOperations.resolveKeyPath(data, key);
     }
 
     /**
