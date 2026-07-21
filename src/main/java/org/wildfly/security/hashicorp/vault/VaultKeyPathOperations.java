@@ -13,7 +13,7 @@ import org.wildfly.security.credential.store.CredentialStoreException;
 /**
  * Utility class for performing key path operations on Vault secret data.
  *
- * <p>This private class provides three core operations for working with Vault secret data:
+ * <p>This package-private class provides three core operations for working with Vault secret data:
  * <ul>
  *   <li>{@link #resolveKeyPath(Map, String)} - Read: extracts values from secret data</li>
  *   <li>{@link #setNestedValue(Map, String, String)} - Write: sets values in secret data</li>
