@@ -135,7 +135,7 @@ public class VaultConnectorKvVersionTestCase {
         }
 
         // Resolve key path
-        return KeyPathResolver.resolveKeyPath(data, key);
+        return VaultKeyPathOperations.resolveKeyPath(data, key);
     }
 
     /**

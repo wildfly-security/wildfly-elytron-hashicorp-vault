@@ -66,7 +66,7 @@ import io.github.jopenlibs.vault.SslConfig;
  * <p>For complete documentation, see the project documentation in the {@code docs/} directory.
  *
  * @see VaultAlias
- * @see KeyPathResolver
+ * @see VaultKeyPathOperations
  */
 public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
@@ -273,7 +273,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             }
 
             // Resolve the specific value using key path
-            String value = KeyPathResolver.resolveKeyPath(secretData, alias.getKeyPath());
+            String value = VaultKeyPathOperations.resolveKeyPath(secretData, alias.getKeyPath());
             if (value == null) {
                 return null; // Key not found in secret
             }

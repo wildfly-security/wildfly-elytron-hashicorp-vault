@@ -120,7 +120,7 @@ public class VaultCliInteroperabilityTestCase {
             return null;
         }
 
-        return KeyPathResolver.resolveKeyPath(data, key);
+        return VaultKeyPathOperations.resolveKeyPath(data, key);
     }
 
     /**

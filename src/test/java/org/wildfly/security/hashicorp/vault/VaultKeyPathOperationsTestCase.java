@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.wildfly.security.credential.store.CredentialStoreException;
 
 /**
- * Unit tests for {@link KeyPathResolver} key path resolution logic.
+ * Unit tests for {@link VaultKeyPathOperations} key path operations.
  *
  * <p>This test class covers:
  * <ul>
@@ -29,9 +29,9 @@ import org.wildfly.security.credential.store.CredentialStoreException;
  *   <li>Set and remove operations for nested values</li>
  * </ul>
  *
- * <p>Test coverage target: >95% for {@link KeyPathResolver} class
+ * <p>Test coverage target: >95% for {@link VaultKeyPathOperations} class
  */
-public class KeyPathResolverTestCase {
+public class VaultKeyPathOperationsTestCase {
 
     private Map<String, Object> testData;
 
@@ -64,28 +64,28 @@ public class KeyPathResolverTestCase {
     @Test
     void testSimpleKeyWithoutDots() throws CredentialStoreException {
         // Top-level key without dots
-        String result = KeyPathResolver.resolveKeyPath(testData, "password");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "password");
         assertEquals("secret123", result);
     }
 
     @Test
     void testSimpleKeyWithDots() throws CredentialStoreException {
         // Top-level key with dots - literal match
-        String result = KeyPathResolver.resolveKeyPath(testData, "db.host");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "db.host");
         assertEquals("localhost", result);
     }
 
     @Test
     void testSimpleKeyNotFound() throws CredentialStoreException {
         // Key that doesn't exist
-        String result = KeyPathResolver.resolveKeyPath(testData, "nonexistent");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "nonexistent");
         assertNull(result);
     }
 
     @Test
     void testSimpleKeyWithDotsNotFound() throws CredentialStoreException {
         // Key with dots that doesn't exist
-        String result = KeyPathResolver.resolveKeyPath(testData, "not.found");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "not.found");
         assertNull(result);
     }
 
@@ -96,42 +96,42 @@ public class KeyPathResolverTestCase {
     @Test
     void testSingleLevelNesting() throws CredentialStoreException {
         // Single-level nested path
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/host");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/host");
         assertEquals("prod.db.com", result);
     }
 
     @Test
     void testSingleLevelNestingInteger() throws CredentialStoreException {
         // Single-level nested path with integer value
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/port");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/port");
         assertEquals("5432", result);
     }
 
     @Test
     void testMultiLevelNesting() throws CredentialStoreException {
         // Multi-level nested path (2 levels)
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/credentials/user");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/credentials/user");
         assertEquals("admin", result);
     }
 
     @Test
     void testDeepNesting() throws CredentialStoreException {
         // Deep nesting (3 levels)
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/credentials/pass");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/credentials/pass");
         assertEquals("secret", result);
     }
 
     @Test
     void testNestedPathNotFound() throws CredentialStoreException {
         // Nested path where intermediate key doesn't exist
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/nonexistent/key");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/nonexistent/key");
         assertNull(result);
     }
 
     @Test
     void testNestedPathLeafNotFound() throws CredentialStoreException {
         // Nested path where leaf key doesn't exist
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/credentials/nonexistent");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/credentials/nonexistent");
         assertNull(result);
     }
 
@@ -142,7 +142,7 @@ public class KeyPathResolverTestCase {
     @Test
     void testNestedPathWithDotsInKeyName() throws CredentialStoreException {
         // Nested path where segment contains dots
-        String result = KeyPathResolver.resolveKeyPath(testData, "my.app/config.key");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "my.app/config.key");
         assertEquals("value123", result);
     }
 
@@ -153,7 +153,7 @@ public class KeyPathResolverTestCase {
         teamAlpha.put("app.config", "alpha-value");
         testData.put("team.alpha", teamAlpha);
 
-        String result = KeyPathResolver.resolveKeyPath(testData, "team.alpha/app.config");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "team.alpha/app.config");
         assertEquals("alpha-value", result);
     }
 
@@ -165,7 +165,7 @@ public class KeyPathResolverTestCase {
     void testNullKeyPath() {
         // Null key path should throw exception
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.resolveKeyPath(testData, null);
+            VaultKeyPathOperations.resolveKeyPath(testData, null);
         });
     }
 
@@ -173,14 +173,14 @@ public class KeyPathResolverTestCase {
     void testEmptyKeyPath() {
         // Empty key path should throw exception
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.resolveKeyPath(testData, "");
+            VaultKeyPathOperations.resolveKeyPath(testData, "");
         });
     }
 
     @Test
     void testNullData() throws CredentialStoreException {
         // Null data map should return null
-        String result = KeyPathResolver.resolveKeyPath(null, "password");
+        String result = VaultKeyPathOperations.resolveKeyPath(null, "password");
         assertNull(result);
     }
 
@@ -188,7 +188,7 @@ public class KeyPathResolverTestCase {
     void testEmptySegmentInPath() {
         // Key path with empty segment (e.g., "database//host")
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.resolveKeyPath(testData, "database//host");
+            VaultKeyPathOperations.resolveKeyPath(testData, "database//host");
         });
     }
 
@@ -196,7 +196,7 @@ public class KeyPathResolverTestCase {
     void testLeadingSlash() {
         // Key path starting with slash
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.resolveKeyPath(testData, "/database/host");
+            VaultKeyPathOperations.resolveKeyPath(testData, "/database/host");
         });
     }
 
@@ -204,21 +204,21 @@ public class KeyPathResolverTestCase {
     void testTrailingSlash() throws CredentialStoreException {
         // Key path ending with slash - trailing empty strings are removed by split()
         // so this is equivalent to "database/host"
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/host/");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/host/");
         assertEquals("prod.db.com", result);
     }
 
     @Test
     void testNonMapValueInTraversalPath() throws CredentialStoreException {
         // Try to traverse through a non-map value
-        String result = KeyPathResolver.resolveKeyPath(testData, "password/subkey");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "password/subkey");
         assertNull(result);
     }
 
     @Test
     void testNonMapIntermediateValue() throws CredentialStoreException {
         // Try to traverse through an integer value
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/port/subkey");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/port/subkey");
         assertNull(result);
     }
 
@@ -226,7 +226,7 @@ public class KeyPathResolverTestCase {
     void testNullValueInData() throws CredentialStoreException {
         // Add null value to test data
         testData.put("nullValue", null);
-        String result = KeyPathResolver.resolveKeyPath(testData, "nullValue");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "nullValue");
         assertNull(result);
     }
 
@@ -236,7 +236,7 @@ public class KeyPathResolverTestCase {
         Map<String, Object> database = (Map<String, Object>) testData.get("database");
         database.put("nullField", null);
 
-        String result = KeyPathResolver.resolveKeyPath(testData, "database/nullField");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "database/nullField");
         assertNull(result);
     }
 
@@ -247,7 +247,7 @@ public class KeyPathResolverTestCase {
     @Test
     void testSetSimpleValue() throws CredentialStoreException {
         Map<String, Object> data = new HashMap<>();
-        KeyPathResolver.setNestedValue(data, "password", "newSecret");
+        VaultKeyPathOperations.setNestedValue(data, "password", "newSecret");
 
         assertEquals("newSecret", data.get("password"));
     }
@@ -255,7 +255,7 @@ public class KeyPathResolverTestCase {
     @Test
     void testSetNestedValueCreatesStructure() throws CredentialStoreException {
         Map<String, Object> data = new HashMap<>();
-        KeyPathResolver.setNestedValue(data, "database/host", "localhost");
+        VaultKeyPathOperations.setNestedValue(data, "database/host", "localhost");
 
         assertTrue(data.containsKey("database"));
         assertTrue(data.get("database") instanceof Map);
@@ -266,7 +266,7 @@ public class KeyPathResolverTestCase {
     @Test
     void testSetDeepNestedValue() throws CredentialStoreException {
         Map<String, Object> data = new HashMap<>();
-        KeyPathResolver.setNestedValue(data, "database/credentials/password", "secret");
+        VaultKeyPathOperations.setNestedValue(data, "database/credentials/password", "secret");
 
         Map<String, Object> database = (Map<String, Object>) data.get("database");
         Map<String, Object> credentials = (Map<String, Object>) database.get("credentials");
@@ -276,7 +276,7 @@ public class KeyPathResolverTestCase {
     @Test
     void testSetValueWithDotsInSegment() throws CredentialStoreException {
         Map<String, Object> data = new HashMap<>();
-        KeyPathResolver.setNestedValue(data, "my.app/config.key", "value");
+        VaultKeyPathOperations.setNestedValue(data, "my.app/config.key", "value");
 
         assertTrue(data.containsKey("my.app"));
         Map<String, Object> myApp = (Map<String, Object>) data.get("my.app");
@@ -288,7 +288,7 @@ public class KeyPathResolverTestCase {
         Map<String, Object> data = new HashMap<>();
         data.put("database", "stringValue");
 
-        KeyPathResolver.setNestedValue(data, "database/host", "localhost");
+        VaultKeyPathOperations.setNestedValue(data, "database/host", "localhost");
 
         assertTrue(data.get("database") instanceof Map);
         Map<String, Object> database = (Map<String, Object>) data.get("database");
@@ -299,7 +299,7 @@ public class KeyPathResolverTestCase {
     void testSetValueNullKeyPath() {
         Map<String, Object> data = new HashMap<>();
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.setNestedValue(data, null, "value");
+            VaultKeyPathOperations.setNestedValue(data, null, "value");
         });
     }
 
@@ -307,14 +307,14 @@ public class KeyPathResolverTestCase {
     void testSetValueEmptyKeyPath() {
         Map<String, Object> data = new HashMap<>();
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.setNestedValue(data, "", "value");
+            VaultKeyPathOperations.setNestedValue(data, "", "value");
         });
     }
 
     @Test
     void testSetValueNullData() {
         assertThrows(IllegalArgumentException.class, () -> {
-            KeyPathResolver.setNestedValue(null, "key", "value");
+            VaultKeyPathOperations.setNestedValue(null, "key", "value");
         });
     }
 
@@ -322,7 +322,7 @@ public class KeyPathResolverTestCase {
     void testSetValueEmptySegment() {
         Map<String, Object> data = new HashMap<>();
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.setNestedValue(data, "database//host", "value");
+            VaultKeyPathOperations.setNestedValue(data, "database//host", "value");
         });
     }
 
@@ -335,7 +335,7 @@ public class KeyPathResolverTestCase {
         Map<String, Object> data = new HashMap<>();
         data.put("password", "secret");
 
-        boolean removed = KeyPathResolver.removeNestedValue(data, "password");
+        boolean removed = VaultKeyPathOperations.removeNestedValue(data, "password");
         assertTrue(removed);
         assertFalse(data.containsKey("password"));
     }
@@ -349,7 +349,7 @@ public class KeyPathResolverTestCase {
         Map<String, Object> data = new HashMap<>();
         data.put("credentials", credentials);
 
-        boolean removed = KeyPathResolver.removeNestedValue(data, "credentials/pass");
+        boolean removed = VaultKeyPathOperations.removeNestedValue(data, "credentials/pass");
         assertTrue(removed);
         assertFalse(credentials.containsKey("pass"));
         assertTrue(credentials.containsKey("user")); // Other keys preserved
@@ -357,7 +357,7 @@ public class KeyPathResolverTestCase {
 
     @Test
     void testRemoveDeepNestedValue() throws CredentialStoreException {
-        boolean removed = KeyPathResolver.removeNestedValue(testData, "database/credentials/pass");
+        boolean removed = VaultKeyPathOperations.removeNestedValue(testData, "database/credentials/pass");
         assertTrue(removed);
 
         Map<String, Object> database = (Map<String, Object>) testData.get("database");
@@ -368,52 +368,52 @@ public class KeyPathResolverTestCase {
 
     @Test
     void testRemoveNonExistentSimpleKey() throws CredentialStoreException {
-        boolean removed = KeyPathResolver.removeNestedValue(testData, "nonexistent");
+        boolean removed = VaultKeyPathOperations.removeNestedValue(testData, "nonexistent");
         assertFalse(removed);
     }
 
     @Test
     void testRemoveNonExistentNestedKey() throws CredentialStoreException {
-        boolean removed = KeyPathResolver.removeNestedValue(testData, "database/nonexistent");
+        boolean removed = VaultKeyPathOperations.removeNestedValue(testData, "database/nonexistent");
         assertFalse(removed);
     }
 
     @Test
     void testRemoveFromNonExistentPath() throws CredentialStoreException {
-        boolean removed = KeyPathResolver.removeNestedValue(testData, "nonexistent/path/key");
+        boolean removed = VaultKeyPathOperations.removeNestedValue(testData, "nonexistent/path/key");
         assertFalse(removed);
     }
 
     @Test
     void testRemoveFromNonMapValue() throws CredentialStoreException {
-        boolean removed = KeyPathResolver.removeNestedValue(testData, "password/subkey");
+        boolean removed = VaultKeyPathOperations.removeNestedValue(testData, "password/subkey");
         assertFalse(removed);
     }
 
     @Test
     void testRemoveNullKeyPath() {
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.removeNestedValue(testData, null);
+            VaultKeyPathOperations.removeNestedValue(testData, null);
         });
     }
 
     @Test
     void testRemoveEmptyKeyPath() {
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.removeNestedValue(testData, "");
+            VaultKeyPathOperations.removeNestedValue(testData, "");
         });
     }
 
     @Test
     void testRemoveNullData() throws CredentialStoreException {
-        boolean removed = KeyPathResolver.removeNestedValue(null, "key");
+        boolean removed = VaultKeyPathOperations.removeNestedValue(null, "key");
         assertFalse(removed);
     }
 
     @Test
     void testRemoveEmptySegment() {
         assertThrows(CredentialStoreException.class, () -> {
-            KeyPathResolver.removeNestedValue(testData, "database//host");
+            VaultKeyPathOperations.removeNestedValue(testData, "database//host");
         });
     }
 
@@ -441,7 +441,7 @@ public class KeyPathResolverTestCase {
 
         testData.put("level1", level1);
 
-        String result = KeyPathResolver.resolveKeyPath(testData, "level1/level2/level3/level4/level5/value");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "level1/level2/level3/level4/level5/value");
         assertEquals("deep", result);
     }
 
@@ -452,29 +452,29 @@ public class KeyPathResolverTestCase {
         testData.put("key#with#hash", "value2");
         testData.put("key?with?question", "value3");
 
-        assertEquals("value1", KeyPathResolver.resolveKeyPath(testData, "key with spaces"));
-        assertEquals("value2", KeyPathResolver.resolveKeyPath(testData, "key#with#hash"));
-        assertEquals("value3", KeyPathResolver.resolveKeyPath(testData, "key?with?question"));
+        assertEquals("value1", VaultKeyPathOperations.resolveKeyPath(testData, "key with spaces"));
+        assertEquals("value2", VaultKeyPathOperations.resolveKeyPath(testData, "key#with#hash"));
+        assertEquals("value3", VaultKeyPathOperations.resolveKeyPath(testData, "key?with?question"));
     }
 
     @Test
     void testBooleanValue() throws CredentialStoreException {
         testData.put("enabled", true);
-        String result = KeyPathResolver.resolveKeyPath(testData, "enabled");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "enabled");
         assertEquals("true", result);
     }
 
     @Test
     void testNumericValue() throws CredentialStoreException {
         testData.put("count", 42);
-        String result = KeyPathResolver.resolveKeyPath(testData, "count");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "count");
         assertEquals("42", result);
     }
 
     @Test
     void testDoubleValue() throws CredentialStoreException {
         testData.put("price", 19.99);
-        String result = KeyPathResolver.resolveKeyPath(testData, "price");
+        String result = VaultKeyPathOperations.resolveKeyPath(testData, "price");
         assertEquals("19.99", result);
     }
 }

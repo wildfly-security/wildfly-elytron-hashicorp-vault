@@ -331,7 +331,7 @@ public class VaultConnector {
     /**
      * Retrieve full secret data from Vault using the new alias format.
      * Returns the complete data map for the secret, which can then be
-     * processed using KeyPathResolver to extract specific values.
+     * processed using VaultKeyPathOperations to extract specific values.
      *
      * @param alias the parsed vault alias containing mount path, secret path, and engine type
      * @return map of all key-value pairs in the secret, or null if secret not found
@@ -412,7 +412,7 @@ public class VaultConnector {
                 Map<String, String> data = response.getData();
                 if (data != null) {
                     ROOT_LOGGER.vaultRetrievedSecret(path, this.vaultUrl);
-                    // Convert Map<String, String> to Map<String, Object> for KeyPathResolver
+                    // Convert Map<String, String> to Map<String, Object> for VaultKeyPathOperations
                     Map<String, Object> result = new HashMap<>();
                     result.putAll(data);
                     return result;
@@ -471,7 +471,7 @@ public class VaultConnector {
             String keyPath = alias.getKeyPath();
             if (keyPath.contains("/")) {
                 // Nested key path - need to traverse and update
-                KeyPathResolver.setNestedValue(secretData, keyPath, value);
+                VaultKeyPathOperations.setNestedValue(secretData, keyPath, value);
             } else {
                 // Simple key - direct update
                 secretData.put(keyPath, value);
@@ -528,7 +528,7 @@ public class VaultConnector {
             boolean removed;
             if (keyPath.contains("/")) {
                 // Nested key path - need to traverse and remove
-                removed = KeyPathResolver.removeNestedValue(secretData, keyPath);
+                removed = VaultKeyPathOperations.removeNestedValue(secretData, keyPath);
             } else {
                 // Simple key - direct removal
                 removed = secretData.remove(keyPath) != null;
