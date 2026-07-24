@@ -6,6 +6,7 @@ package org.wildfly.security.hashicorp.vault;
 
 import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
 
+import org.wildfly.common.Assert;
 import org.wildfly.security.credential.store.CredentialStoreException;
 
 /**
@@ -61,17 +62,23 @@ class VaultAlias extends VaultPath {
      * @throws CredentialStoreException if the engine type is invalid or any required component is null/empty
      */
     static VaultAlias create(String engineType, String mountPath, String secretPath, String keyPath) throws CredentialStoreException {
-        // Validate required parameters
-        if (engineType == null || engineType.isEmpty()) {
+        // Validate required parameters - null checks
+        Assert.checkNotNullParam("engineType", engineType);
+        Assert.checkNotNullParam("mountPath", mountPath);
+        Assert.checkNotNullParam("secretPath", secretPath);
+        Assert.checkNotNullParam("keyPath", keyPath);
+
+        // Business validation - empty checks
+        if (engineType.isEmpty()) {
             throw ROOT_LOGGER.engineTypeCannotBeEmpty("direct creation");
         }
-        if (mountPath == null || mountPath.isEmpty()) {
+        if (mountPath.isEmpty()) {
             throw ROOT_LOGGER.mountPathCannotBeEmpty("direct creation");
         }
-        if (secretPath == null || secretPath.isEmpty()) {
+        if (secretPath.isEmpty()) {
             throw ROOT_LOGGER.secretPathCannotBeEmpty("direct creation");
         }
-        if (keyPath == null || keyPath.isEmpty()) {
+        if (keyPath.isEmpty()) {
             throw ROOT_LOGGER.keyPathCannotBeEmpty("direct creation");
         }
 
