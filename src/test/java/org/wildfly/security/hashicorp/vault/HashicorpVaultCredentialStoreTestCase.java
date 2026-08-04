@@ -604,12 +604,12 @@ public class HashicorpVaultCredentialStoreTestCase {
 
     /**
      * Call {@code initialize()} with {@code null} attributes map.
-     * Test passes when {@link CredentialStoreException} is thrown.
+     * Test passes when {@link IllegalArgumentException} is thrown.
      */
     @Test
     public void testInitializeWithNullAttributes() {
         HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
-        assertThrows(CredentialStoreException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> store.initialize(null, createProtectionParameter("token"), new Provider[]{}));
     }
 
