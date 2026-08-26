@@ -6,6 +6,7 @@ package org.wildfly.security.hashicorp.vault;
 
 import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
 
+import org.wildfly.common.Assert;
 import org.wildfly.common.annotation.NotNull;
 
 /**
@@ -18,9 +19,17 @@ public final class JwtConfig {
     private final String jwtProvider;
 
     public JwtConfig(@NotNull String jwt, @NotNull String jwtRole, @NotNull String jwtProvider) {
-        this.jwt = checkRequired(jwt);
-        this.jwtRole = checkRequired(jwtRole);
-        this.jwtProvider = checkRequired(jwtProvider);
+        this.jwt = checkRequired("jwt", jwt);
+        this.jwtRole = checkRequired("jwtRole", jwtRole);
+        this.jwtProvider = checkRequired("jwtProvider", jwtProvider);
+    }
+
+    private String checkRequired(String paramName, String value) throws IllegalArgumentException {
+        Assert.checkNotNullParam(paramName, value);
+        if (value.trim().isEmpty()) {
+            throw new IllegalArgumentException("Parameter '" + paramName + "' must not be empty or blank");
+        }
+        return value;
     }
 
     public String getJwt() {
@@ -33,12 +42,5 @@ public final class JwtConfig {
 
     public String getJwtProvider() {
         return jwtProvider;
-    }
-
-    private String checkRequired(String value) throws IllegalArgumentException {
-        if (value == null || value.trim().isEmpty()) {
-            throw ROOT_LOGGER.jwtMissingRequiredProperty();
-        }
-        return value;
     }
 }

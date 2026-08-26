@@ -20,6 +20,7 @@ import java.util.Set;
 
 import javax.net.ssl.SSLContext;
 
+import org.wildfly.common.Assert;
 import org.wildfly.security.credential.Credential;
 import org.wildfly.security.credential.PasswordCredential;
 import org.wildfly.security.credential.store.CredentialStore;
@@ -102,9 +103,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
     @Override
     public void initialize(Map<String, String> attributes, CredentialStore.ProtectionParameter protectionParameter, Provider[] providers) throws CredentialStoreException {
-        if (attributes == null) {
-            throw ROOT_LOGGER.attributesCannotBeNull();
-        }
+        Assert.checkNotNullParam("attributes", attributes);
 
         // Check required attributes
         this.hostAddress = attributes.get("host-address");

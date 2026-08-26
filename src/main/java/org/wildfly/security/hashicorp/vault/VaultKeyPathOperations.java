@@ -8,6 +8,7 @@ import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger
 
 import java.util.Map;
 
+import org.wildfly.common.Assert;
 import org.wildfly.security.credential.store.CredentialStoreException;
 
 /**
@@ -174,9 +175,7 @@ class VaultKeyPathOperations {
         if (keyPath == null || keyPath.isEmpty()) {
             throw ROOT_LOGGER.keyPathCannotBeNullOrEmpty();
         }
-        if (data == null) {
-            throw new IllegalArgumentException("Data map cannot be null");
-        }
+        Assert.checkNotNullParam("data", data);
 
         // Check if key path contains / (nested path)
         if (!keyPath.contains("/")) {
