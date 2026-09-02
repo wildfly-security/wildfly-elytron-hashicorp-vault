@@ -75,7 +75,7 @@ class VaultPath {
         }
 
         // Validate engine type
-        if (!engineType.equals("KVv1") && !engineType.equals("KVv2")) {
+        if (!engineType.equals(VaultConstants.ENGINE_TYPE_KV_V1) && !engineType.equals(VaultConstants.ENGINE_TYPE_KV_V2)) {
             throw ROOT_LOGGER.invalidEngineType(engineType);
         }
 
@@ -255,7 +255,7 @@ class VaultPath {
         secretPath = urlDecode(secretPath);
 
         // 6. Validate engine type after URL decoding
-        if (!engineType.equals("KVv1") && !engineType.equals("KVv2")) {
+        if (!engineType.equals(VaultConstants.ENGINE_TYPE_KV_V1) && !engineType.equals(VaultConstants.ENGINE_TYPE_KV_V2)) {
             throw ROOT_LOGGER.invalidEngineType(engineType);
         }
 

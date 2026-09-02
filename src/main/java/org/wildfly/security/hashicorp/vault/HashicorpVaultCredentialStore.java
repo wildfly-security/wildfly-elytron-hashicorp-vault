@@ -94,10 +94,10 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     private boolean supportLegacyAliasFormat = false;
 
     /** Default engine type to use when not specified in alias. */
-    private String defaultEngineType = "KVv2";
+    private String defaultEngineType = VaultConstants.ENGINE_TYPE_KV_V2;
 
     /** Default mount path to use when not specified in alias. */
-    private String defaultMountPath = "secret";
+    private String defaultMountPath = VaultConstants.DEFAULT_MOUNT_PATH;
 
 
     @Override
@@ -140,7 +140,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
         if (attributes.get("default-engine-type") != null) {
             this.defaultEngineType = attributes.get("default-engine-type");
             // Validate engine type
-            if (!this.defaultEngineType.equals("KVv1") && !this.defaultEngineType.equals("KVv2")) {
+            if (!this.defaultEngineType.equals(VaultConstants.ENGINE_TYPE_KV_V1) && !this.defaultEngineType.equals(VaultConstants.ENGINE_TYPE_KV_V2)) {
                 throw ROOT_LOGGER.invalidDefaultEngineType(this.defaultEngineType);
             }
         }
@@ -346,7 +346,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
     @Override
     public Set<String> getAliases() throws UnsupportedOperationException, CredentialStoreException {
         // Use "secret/" as the default path when none provided
-        return getAliases("secret/");
+        return getAliases(VaultConstants.DEFAULT_MOUNT_PATH + "/");
     }
 
     /**

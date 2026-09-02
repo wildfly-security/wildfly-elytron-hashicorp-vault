@@ -64,7 +64,7 @@ public class VaultCredentialSource implements CredentialSource {
 
         this.vaultConnector = vaultConnector;
         try {
-            this.alias = VaultAlias.parse(alias, "KVv2", "secret");
+            this.alias = VaultAlias.parse(alias, VaultConstants.ENGINE_TYPE_KV_V2, VaultConstants.DEFAULT_MOUNT_PATH);
         } catch (CredentialStoreException e) {
             throw new IllegalArgumentException("Failed to parse alias: " + e.getMessage(), e);
         }
@@ -145,7 +145,7 @@ public class VaultCredentialSource implements CredentialSource {
         // The secretPath in legacy format includes the mount path (e.g., "secret/testing1")
         try {
             // Extract mount path and secret path from legacy format
-            String mountPath = "secret"; // default
+            String mountPath = VaultConstants.DEFAULT_MOUNT_PATH; // default
             String actualSecretPath = secretPath;
 
             if (secretPath.contains("/")) {
@@ -154,7 +154,7 @@ public class VaultCredentialSource implements CredentialSource {
                 actualSecretPath = secretPath.substring(firstSlash + 1);
             }
 
-            this.alias = VaultAlias.create("KVv2", mountPath, actualSecretPath, secretKey);
+            this.alias = VaultAlias.create(VaultConstants.ENGINE_TYPE_KV_V2, mountPath, actualSecretPath, secretKey);
         } catch (CredentialStoreException e) {
             throw new IllegalArgumentException("Failed to convert legacy path/key to alias format: " + e.getMessage(), e);
         }
