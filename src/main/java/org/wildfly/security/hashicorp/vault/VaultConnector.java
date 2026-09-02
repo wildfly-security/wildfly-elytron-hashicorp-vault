@@ -182,7 +182,7 @@ public class VaultConnector {
         final int kvVersion;
         final int segmentCount;
 
-        if ("KVv1".equals(engineType)) {
+        if (VaultConstants.ENGINE_TYPE_KV_V1.equals(engineType)) {
             // KV v1 doesn't use /data/ insertion, so segment count doesn't matter
             kvVersion = 1;
             segmentCount = 0; // irrelevant for v1
@@ -208,10 +208,10 @@ public class VaultConnector {
         final String cacheKey;
         if (kvVersion == 1) {
             // KV v1 doesn't use /data/ insertion, so segment count doesn't matter
-            cacheKey = "KVv1";
+            cacheKey = VaultConstants.ENGINE_TYPE_KV_V1;
         } else {
             // KV v2 - need to account for mount path segment count
-            cacheKey = "KVv2-" + segmentCount;
+            cacheKey = VaultConstants.ENGINE_TYPE_KV_V2 + "-" + segmentCount;
         }
 
         try {

@@ -76,7 +76,7 @@ class VaultAlias extends VaultPath {
         }
 
         // Validate engine type
-        if (!engineType.equals("KVv1") && !engineType.equals("KVv2")) {
+        if (!engineType.equals(VaultConstants.ENGINE_TYPE_KV_V1) && !engineType.equals(VaultConstants.ENGINE_TYPE_KV_V2)) {
             throw ROOT_LOGGER.invalidEngineType(engineType);
         }
 
@@ -98,7 +98,7 @@ class VaultAlias extends VaultPath {
      * @throws CredentialStoreException if the alias format is invalid
      */
     public static VaultAlias parse(String alias) throws CredentialStoreException {
-        return parse(alias, "KVv2", "secret", false);
+        return parse(alias, VaultConstants.ENGINE_TYPE_KV_V2, VaultConstants.DEFAULT_MOUNT_PATH, false);
     }
 
     /**
@@ -166,9 +166,9 @@ class VaultAlias extends VaultPath {
             throw ROOT_LOGGER.invalidEngineType("null");
         }
         switch (engineType) {
-            case "KVv1":
+            case VaultConstants.ENGINE_TYPE_KV_V1:
                 return 1;
-            case "KVv2":
+            case VaultConstants.ENGINE_TYPE_KV_V2:
                 return 2;
             default:
                 throw ROOT_LOGGER.invalidEngineType(engineType);
